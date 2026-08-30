@@ -1,45 +1,65 @@
-# IntelliAssist AI — Smart Document AI Assistant
+# IntelliAssist AI — Embeddings and Semantic Search
 
-IntelliAssist AI is a modular document processing and analysis assistant designed to ingest, validate, clean, and chunk multi-format documents for downstream natural language processing and retrieval pipelines.
-
----
-
-## 📌 Problem Statement
-
-Unstructured documents (PDFs, Word documents, text files) often contain irregular formatting, redundant whitespace, varying structural layouts, and missing metadata. Before modern search or language models can effectively index or reason over document collections, documents must undergo rigorous validation, text extraction, non-destructive normalization, and semantic chunking while preserving lineage and metadata.
+IntelliAssist AI is a modular document processing, embedding, and semantic search assistant. It ingests multi-format documents (PDF, TXT, DOCX), validates content, cleans and normalizes text, splits documents into manageable chunks, generates dense vector embeddings using Hugging Face Sentence Transformers, and performs high-speed semantic similarity searches using a FAISS vector store.
 
 ---
 
-## 💡 Solution Overview
+## 📌 Pipeline Architecture
 
-IntelliAssist AI provides an end-to-end, modular document ingestion foundation built with Python, LangChain, and Streamlit. It automates:
-1. **Multi-Format Document Parsing**: Structured page-level and section-level text extraction from PDF, TXT, and DOCX files.
-2. **Text Normalization**: Cleans excessive spaces, standardizes line breaks, and handles unicode characters while strictly preserving punctuation and semantic context.
-3. **Configurable Semantic Chunking**: Splits normalized text using LangChain's `RecursiveCharacterTextSplitter` with customizable chunk size and overlap, ensuring full metadata continuity (page numbers, chunk indices, character/word counts).
-4. **Validation & Error Handling**: Proactive validation for unsupported formats, empty files, size limits, and unreadable/scanned documents with user-friendly feedback.
+```text
+Document Upload (PDF, TXT, DOCX — Single or Multiple)
+        ↓
+Text & Metadata Extraction (DocumentLoader)
+        ↓
+Validation & Quality Checks (DocumentValidator)
+        ↓
+Text Normalization & Cleaning (TextPreprocessor)
+        ↓
+Configurable Text Chunking (DocumentChunker)
+        ↓
+Hugging Face Embeddings (EmbeddingManager: all-MiniLM-L6-v2)
+        ↓
+FAISS Vector Store Indexing (VectorStoreManager)
+        ↓
+User Natural Language Query → Query Vector → FAISS Similarity Search → Top-K Ranked Results
+```
 
 ---
 
-## ✨ Current Features
+## ✨ Implemented Features
 
-* **Multi-Format Document Upload**: Support for `.pdf`, `.txt`, and `.docx` via an intuitive Streamlit interface.
-* **Metadata-Preserving Document Loading**: Extracts source names, page numbers, line counts, character counts, and paragraph counts.
-* **Non-Destructive Text Preprocessing**: Strips redundant whitespace and blank lines without aggressive stripping of numbers, symbols, or punctuation.
-* **Configurable Chunking**: Dynamic adjustment of chunk size and overlap parameters in the Streamlit UI.
-* **Interactive Chunk & Metadata Inspector**: Visual cards and expandable tabs to examine generated chunks, clean text previews, and document metrics in real time.
-* **Validation & Security**: Built-in file type and content validation, `.env.example` templates, and strict exclusion of credentials and secrets.
+* **Multi-Format Document Parsing**:
+  * Page-level extraction from **PDF** (`pypdf`).
+  * Structured paragraph and table extraction from **DOCX** (`python-docx`).
+  * Text file processing with encoding fallbacks for **TXT** (UTF-8 / Latin-1).
+* **Multi-Document Support**: Upload and index multiple files at once. Lineage and source metadata are preserved across all documents in a unified FAISS index.
+* **Non-Destructive Text Preprocessing**: Strips excessive whitespace, normalizes Unicode (NFKC), and standardizes line breaks while strictly preserving punctuation and structural meaning.
+* **Configurable Semantic Chunking**: Splits normalized text using LangChain's `RecursiveCharacterTextSplitter` with customizable chunk size and overlap parameters.
+* **Hugging Face Sentence Embeddings**:
+  * Uses the open-source `sentence-transformers/all-MiniLM-L6-v2` model (384-dimensional dense vectors).
+  * Runs entirely on CPU without any paid API keys or external services.
+  * Encapsulated in a modular `EmbeddingManager` with automatic resource caching.
+* **FAISS Vector Store**:
+  * In-memory FAISS indexing with full document chunk and metadata persistence.
+  * Fast similarity search using cosine and normalized Euclidean (L2) distance.
+  * Dynamic index construction and updating when documents are processed.
+* **Semantic Search Interface**:
+  * Natural language query input with ranked results.
+  * Normalized similarity/relevance scores (0% to 100%) with color-coded badges.
+  * Detailed result cards showing source document filename, page/section number, chunk index, and retrieved text.
+* **Robust Error Handling**: Friendly error banners for missing files, empty queries, unreadable scans, or processing issues without exposing technical stack traces.
 
 ---
 
 ## 🛠️ Technology Stack
 
 * **Language**: Python 3.10+
-* **User Interface**: Streamlit
-* **Text Processing & Chunking**: LangChain Core (`langchain-core`), LangChain Text Splitters (`langchain-text-splitters`)
-* **Document Extraction**:
-  * PDF: `pypdf`
-  * DOCX: `python-docx`
-  * TXT: Built-in Python I/O with UTF-8 / Latin-1 fallback
+* **Frontend**: Streamlit
+* **Embeddings**: `sentence-transformers`, `langchain-huggingface` (`all-MiniLM-L6-v2`)
+* **Vector Store**: FAISS (`faiss-cpu`)
+* **Document Processing & Chunking**: `langchain-core`, `langchain-community`, `langchain-text-splitters`
+* **File Extractors**: `pypdf` (PDF), `python-docx` (DOCX), built-in Python I/O (TXT)
+* **Configuration**: `python-dotenv`
 * **Testing**: Python `unittest`
 
 ---
@@ -49,36 +69,33 @@ IntelliAssist AI provides an end-to-end, modular document ingestion foundation b
 ```text
 IntelliAssist-AI/
 ├── modules/
-│   ├── __init__.py           # Package exports
-│   ├── chunker.py            # LangChain document chunking implementation
-│   ├── document_loader.py    # Modular PDF, TXT, and DOCX text extraction
-│   ├── preprocessor.py       # Whitespace cleaning and normalization
-│   └── validator.py          # File upload and content validation
+│   ├── __init__.py                  # Core modules package exports
+│   ├── chunker.py                   # Configurable LangChain document chunking
+│   ├── document_loader.py           # Multi-format document loading (PDF, TXT, DOCX)
+│   ├── embeddings.py                # Hugging Face sentence-transformers embedding manager
+│   ├── preprocessor.py              # Text cleaning and Unicode normalization
+│   ├── validator.py                 # File upload and content validation
+│   └── vector_store.py              # FAISS vector store and similarity search manager
 ├── utils/
-│   └── __init__.py           # Utility helpers
+│   ├── __init__.py                  # Utility package exports
+│   └── helpers.py                   # Score formatting, color coding, and string helpers
 ├── tests/
-│   ├── __init__.py           # Test suite package
-│   ├── test_chunker.py       # Chunker unit tests
-│   ├── test_document_loader.py # Loader unit tests (PDF, TXT, DOCX)
-│   ├── test_pipeline.py      # End-to-end integration tests
-│   ├── test_preprocessor.py  # Text preprocessor unit tests
-│   └── test_validator.py     # Validator unit tests
-├── .env.example              # Environment variable template
-├── .gitignore                # Git ignore rules
-├── app.py                    # Streamlit web application entrypoint
-├── requirements.txt          # Pinned project dependencies
-└── README.md                 # Project documentation
+│   ├── __init__.py                  # Test suite package
+│   ├── test_chunker.py              # Unit tests for text chunker
+│   ├── test_document_loader.py      # Unit tests for loaders (PDF, TXT, DOCX)
+│   ├── test_embeddings.py           # Unit tests for Hugging Face embeddings
+│   ├── test_pipeline.py             # Full ingestion & search pipeline integration tests
+│   ├── test_preprocessor.py         # Unit tests for text preprocessor
+│   ├── test_validator.py            # Unit tests for document validator
+│   ├── test_vector_search_integration.py # Multi-document vector search tests
+│   └── test_vector_store.py         # Unit tests for FAISS vector store
+├── .env.example                     # Environment configuration template
+├── .gitignore                       # Git ignore rules
+├── app.py                           # Streamlit web application entrypoint
+├── config.py                        # Centralized application and model configuration
+├── requirements.txt                 # Project dependencies
+└── README.md                        # Documentation
 ```
-
----
-
-## 📄 Supported Document Formats
-
-| Format | Extension | Extraction Method | Extracted Metadata |
-|---|---|---|---|
-| **Portable Document Format** | `.pdf` | `pypdf` | Page numbers, total pages, character count, file name, file type |
-| **Plain Text** | `.txt` | Python UTF-8 / Latin-1 | Line count, character count, file name, file type |
-| **Microsoft Word** | `.docx` | `python-docx` | Paragraph count, table count, character count, file name, file type |
 
 ---
 
@@ -109,7 +126,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### 4. Configure Environment Variables (Optional)
 
 ```bash
 cp .env.example .env
@@ -125,7 +142,17 @@ Start the Streamlit application:
 streamlit run app.py
 ```
 
-Open your browser at `http://localhost:8501`.
+The application will launch locally at `http://localhost:8501`.
+
+---
+
+## 🔍 How to Perform Semantic Search
+
+1. **Upload Documents**: Select one or more `.pdf`, `.txt`, or `.docx` files using the sidebar file uploader.
+2. **Configure Parameters (Optional)**: Adjust chunk size, overlap, or the top-K retrieved results in the sidebar.
+3. **Automatic Indexing**: The application extracts text, normalizes content, generates chunk embeddings using `all-MiniLM-L6-v2`, and constructs the FAISS vector index.
+4. **Enter Search Query**: Type any natural language question or topic in the **Semantic Similarity Search** input field (e.g., *"What were the quarterly financial highlights?"* or *"Explain cloud architecture"*).
+5. **Inspect Retrieved Results**: Review ranked chunks with relevance percentage scores, document origins, page numbers, and exact chunk text.
 
 ---
 
@@ -134,5 +161,5 @@ Open your browser at `http://localhost:8501`.
 Run the complete test suite using `unittest`:
 
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover -s tests -v
 ```
