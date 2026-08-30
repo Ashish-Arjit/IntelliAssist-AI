@@ -7,20 +7,24 @@ from pypdf import PageObject, PdfWriter
 
 from modules.chunker import DocumentChunker
 from modules.document_loader import DocumentLoader
+from modules.embeddings import EmbeddingManager
 from modules.preprocessor import TextPreprocessor
 from modules.validator import DocumentValidator
+from modules.vector_store import VectorStoreManager
 
 
 class TestPipelineIntegration(unittest.TestCase):
-    """Integration test suite for the complete document ingestion pipeline."""
+    """Integration test suite for the complete document ingestion, embedding, and search pipeline."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.embedding_manager = EmbeddingManager()
 
     def test_full_pipeline_txt(self):
         raw_text = "IntelliAssist AI is a modular smart assistant.\n\n\n\nIt processes documents efficiently."
         txt_bytes = raw_text.encode("utf-8")
 
         # 1. Validation
-        val = DocumentValidator.validate_file_upload(txt_bytes)
-        # Note: bytes without filename will fail extension check unless name provided
         val = DocumentValidator.validate_file_upload(
             type("MockFile", (), {"name": "doc.txt", "size": len(txt_bytes), "getvalue": lambda self: txt_bytes})()
         )
@@ -49,21 +53,37 @@ class TestPipelineIntegration(unittest.TestCase):
         self.assertEqual(chunks[0].metadata["file_name"], "doc.txt")
         self.assertEqual(chunks[0].metadata["chunk_index"], 1)
 
+        # 6. FAISS Embedding and Search
+        vector_manager = VectorStoreManager(embedding_manager=self.embedding_manager)
+        vector_manager.create_from_documents(chunks)
+        self.assertEqual(vector_manager.total_vectors, len(chunks))
+
+        results = vector_manager.similarity_search_with_score("modular smart assistant", top_k=2)
+        self.assertGreater(len(results), 0)
+        self.assertIn("IntelliAssist", results[0][0].page_content)
+        self.assertGreater(results[0][2], 0.4)
+
     def test_full_pipeline_docx(self):
         doc = docx.Document()
-        doc.add_paragraph("Paragraph 1 with redundant    spaces.")
-        doc.add_paragraph("Paragraph 2 content.")
+        doc.add_heading("Machine Learning Architecture", level=1)
+        doc.add_paragraph("Neural networks learn latent representations from data through backpropagation.")
         stream = BytesIO()
         doc.save(stream)
         docx_bytes = stream.getvalue()
 
-        docs = DocumentLoader.load_document(docx_bytes, filename="spec.docx")
+        docs = DocumentLoader.load_document(docx_bytes, filename="ml_spec.docx")
         preprocessed = TextPreprocessor.preprocess_documents(docs)
         chunker = DocumentChunker(chunk_size=100, chunk_overlap=20)
         chunks = chunker.split_documents(preprocessed)
 
         self.assertGreaterEqual(len(chunks), 1)
         self.assertEqual(chunks[0].metadata["file_type"], "docx")
+
+        vector_manager = VectorStoreManager(embedding_manager=self.embedding_manager)
+        vector_manager.create_from_documents(chunks)
+        results = vector_manager.similarity_search_with_score("deep neural networks backpropagation", top_k=1)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0][0].metadata["file_name"], "ml_spec.docx")
 
     def test_full_pipeline_pdf(self):
         writer = PdfWriter()
