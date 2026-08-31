@@ -66,3 +66,41 @@ def clean_query_text(query: Optional[str]) -> str:
         return ""
     # Strip whitespace and collapse redundant spaces
     return re.sub(r"\s+", " ", query).strip()
+
+
+def truncate_snippet(text: str, max_chars: int = 280) -> str:
+    """Truncate long text snippet cleanly with an ellipsis.
+
+    Args:
+        text: Input text string.
+        max_chars: Maximum character limit.
+
+    Returns:
+        Truncated text string.
+    """
+    if not text:
+        return ""
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if len(cleaned) <= max_chars:
+        return cleaned
+    return cleaned[:max_chars].rstrip() + "..."
+
+
+def format_citation_label(file_name: str, page: Optional[int] = None, chunk_index: Optional[int] = None) -> str:
+    """Create a formatted display label for a citation.
+
+    Args:
+        file_name: Document file name.
+        page: Optional page number for PDFs.
+        chunk_index: Optional chunk index.
+
+    Returns:
+        Formatted label string.
+    """
+    parts = [file_name]
+    if page is not None:
+        parts.append(f"Page {page}")
+    if chunk_index is not None:
+        parts.append(f"Chunk #{chunk_index}")
+    return " • ".join(parts)
+
