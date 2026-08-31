@@ -6,6 +6,7 @@ from modules.embeddings import EmbeddingManager
 from modules.preprocessor import TextPreprocessor
 from modules.validator import DocumentValidator, ValidationResult
 from modules.vector_store import VectorStoreManager
+from modules.rag_pipeline import RAGPipeline
 
 __all__ = [
     "DocumentLoader",
@@ -15,6 +16,8 @@ __all__ = [
     "ValidationResult",
     "EmbeddingManager",
     "VectorStoreManager",
+    "RAGPipeline",
 ]
+
 
 
