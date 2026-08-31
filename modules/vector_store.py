@@ -23,11 +23,19 @@ class VectorStoreManager:
         """Initialize VectorStoreManager.
 
         Args:
-            embedding_manager: EmbeddingManager instance. If None, creates a default instance.
+            embedding_manager: EmbeddingManager instance. If None, lazily creates a default instance.
             vector_store: Optional existing LangChain FAISS instance.
         """
-        self.embedding_manager = embedding_manager or EmbeddingManager()
+        self._embedding_manager = embedding_manager
         self._vector_store: Optional[FAISS] = vector_store
+
+    @property
+    def embedding_manager(self) -> EmbeddingManager:
+        """Get or lazily initialize the EmbeddingManager."""
+        if self._embedding_manager is None:
+            self._embedding_manager = EmbeddingManager()
+        return self._embedding_manager
+
 
     @property
     def vector_store(self) -> Optional[FAISS]:

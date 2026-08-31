@@ -33,9 +33,10 @@ ALLOWED_EXTENSIONS: set[str] = {"pdf", "txt", "docx"}
 
 # LLM & RAG Pipeline Configuration
 DEFAULT_LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
-DEFAULT_LLM_MODEL: str = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
+DEFAULT_LLM_MODEL: str = os.getenv("LLM_MODEL_NAME", "gemini-3.6-flash")
 DEFAULT_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
 DEFAULT_MAX_OUTPUT_TOKENS: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "1024"))
+
 
 # Grounded RAG Messages & Fallbacks
 NO_CONTEXT_FOUND_MESSAGE: str = (

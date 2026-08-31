@@ -68,12 +68,12 @@ class RAGPipeline:
         self.model_name = model_name
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
-        self.api_key = (
-            api_key
-            or os.getenv("GOOGLE_API_KEY")
-            or os.getenv("GEMINI_API_KEY")
-        )
+        if api_key is not None:
+            self.api_key = api_key
+        else:
+            self.api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
         self._llm: Optional[ChatGoogleGenerativeAI] = None
+
         self.prompt_template = self._build_prompt_template()
 
     @property
@@ -297,12 +297,18 @@ class RAGPipeline:
 
             # Ensure string output
             if isinstance(raw_answer, list):
-                # Langchain sometimes returns list of blocks
-                answer_text = "".join(
-                    b.get("text", str(b)) if isinstance(b, dict) else str(b) for b in raw_answer
-                )
+                text_parts = []
+                for b in raw_answer:
+                    if isinstance(b, dict):
+                        text_parts.append(b.get("text", str(b)))
+                    elif hasattr(b, "text"):
+                        text_parts.append(str(getattr(b, "text")))
+                    else:
+                        text_parts.append(str(b))
+                answer_text = "".join(text_parts).strip()
             else:
                 answer_text = str(raw_answer).strip()
+
 
             return {
                 "answer": answer_text,
