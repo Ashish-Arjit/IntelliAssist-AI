@@ -1,64 +1,74 @@
-# IntelliAssist AI — Embeddings and Semantic Search
+# IntelliAssist AI — Document RAG Chatbot and Source Citations
 
-IntelliAssist AI is a modular document processing, embedding, and semantic search assistant. It ingests multi-format documents (PDF, TXT, DOCX), validates content, cleans and normalizes text, splits documents into manageable chunks, generates dense vector embeddings using Hugging Face Sentence Transformers, and performs high-speed semantic similarity searches using a FAISS vector store.
+IntelliAssist AI is a modular, production-ready Retrieval-Augmented Generation (RAG) assistant designed for intelligent document question answering. It ingests multi-format documents (PDF, TXT, DOCX), validates and normalizes text, splits content into semantic chunks, generates dense vector embeddings using Hugging Face Sentence Transformers, indexes vectors using an in-memory FAISS vector store, and integrates with **Google Gemini LLM** to deliver accurate, strictly grounded answers with verifiable source citations.
 
 ---
 
-## 📌 Pipeline Architecture
+## 📌 RAG Architecture & Pipeline Flow
 
 ```text
-Document Upload (PDF, TXT, DOCX — Single or Multiple)
-        ↓
-Text & Metadata Extraction (DocumentLoader)
-        ↓
-Validation & Quality Checks (DocumentValidator)
-        ↓
-Text Normalization & Cleaning (TextPreprocessor)
-        ↓
-Configurable Text Chunking (DocumentChunker)
-        ↓
-Hugging Face Embeddings (EmbeddingManager: all-MiniLM-L6-v2)
-        ↓
-FAISS Vector Store Indexing (VectorStoreManager)
-        ↓
-User Natural Language Query → Query Vector → FAISS Similarity Search → Top-K Ranked Results
+User Question
+      ↓
+Query Embedding (sentence-transformers/all-MiniLM-L6-v2)
+      ↓
+FAISS Vector Similarity Search (Top-K Chunks)
+      ↓
+Retrieved Document Chunks + Lineage Metadata (Filename, Page, Index, Score)
+      ↓
+Grounded Context Assembly & Prompt Engineering
+      ↓
+Google Gemini LLM (gemini-3.6-flash / ChatGoogleGenerativeAI)
+      ↓
+Context-Aware Answer + Verified Source Citations (Page Numbers & Snippets)
 ```
 
 ---
 
-## ✨ Implemented Features
+## ✨ Key Implemented Features
 
-* **Multi-Format Document Parsing**:
+* **Grounded Question Answering**:
+  * Answers are synthesized strictly from the retrieved document chunks.
+  * Explicit fallback response (`"I couldn't find this information in the uploaded documents."`) whenever relevant context is unavailable or insufficient.
+  * Strictly avoids hallucinations, inventions, or unrestricted open-domain chatbot behavior.
+
+* **Verified Source Citations**:
+  * Every generated answer is paired with collapsible source citation cards.
+  * Displays source document filename, PDF page number, chunk index, relevance score badges, and context preview snippets.
+  * Citations map 1:1 with the chunks retrieved for that specific query.
+
+* **Multi-Document & Multi-Format Ingestion**:
   * Page-level extraction from **PDF** (`pypdf`).
   * Structured paragraph and table extraction from **DOCX** (`python-docx`).
   * Text file processing with encoding fallbacks for **TXT** (UTF-8 / Latin-1).
-* **Multi-Document Support**: Upload and index multiple files at once. Lineage and source metadata are preserved across all documents in a unified FAISS index.
-* **Non-Destructive Text Preprocessing**: Strips excessive whitespace, normalizes Unicode (NFKC), and standardizes line breaks while strictly preserving punctuation and structural meaning.
-* **Configurable Semantic Chunking**: Splits normalized text using LangChain's `RecursiveCharacterTextSplitter` with customizable chunk size and overlap parameters.
-* **Hugging Face Sentence Embeddings**:
-  * Uses the open-source `sentence-transformers/all-MiniLM-L6-v2` model (384-dimensional dense vectors).
-  * Runs entirely on CPU without any paid API keys or external services.
-  * Encapsulated in a modular `EmbeddingManager` with automatic resource caching.
-* **FAISS Vector Store**:
-  * In-memory FAISS indexing with full document chunk and metadata persistence.
-  * Fast similarity search using cosine and normalized Euclidean (L2) distance.
-  * Dynamic index construction and updating when documents are processed.
-* **Semantic Search Interface**:
-  * Natural language query input with ranked results.
-  * Normalized similarity/relevance scores (0% to 100%) with color-coded badges.
-  * Detailed result cards showing source document filename, page/section number, chunk index, and retrieved text.
-* **Robust Error Handling**: Friendly error banners for missing files, empty queries, unreadable scans, or processing issues without exposing technical stack traces.
+  * Simultaneously indexes multiple uploaded files into a unified FAISS vector store.
+
+* **Semantic Chunking & Lineage Preservation**:
+  * Recursive character text splitting with configurable chunk size and chunk overlap.
+  * Preserves metadata including source document name, page numbers, character/word counts, and chunk indices.
+
+* **Hugging Face Sentence Embeddings & FAISS Retrieval**:
+  * Open-source `sentence-transformers/all-MiniLM-L6-v2` dense 384-dimensional embeddings.
+  * High-speed FAISS vector store nearest-neighbor similarity search with normalized relevance score calculations (0%–100%).
+  * Configurable Top-K retrieval parameters.
+
+* **Modern Streamlit Chat Interface**:
+  * Interactive conversational interface with chat messages, user query inputs, and instant response rendering.
+  * Multi-tab inspection dashboard with dedicated views for Chatbot, Semantic Search, Indexed Chunks, and Ingestion Metadata.
+
+* **Robust Error Handling**:
+  * Handles missing API keys, empty queries, unindexed vector stores, quota limits, and API connection failures cleanly without crashing or exposing technical stack traces.
 
 ---
 
 ## 🛠️ Technology Stack
 
 * **Language**: Python 3.10+
-* **Frontend**: Streamlit
-* **Embeddings**: `sentence-transformers`, `langchain-huggingface` (`all-MiniLM-L6-v2`)
+* **LLM Provider**: Google Gemini (`gemini-3.6-flash` via `langchain-google-genai`)
+* **Embeddings**: Hugging Face Sentence Transformers (`all-MiniLM-L6-v2` via `langchain-huggingface`)
 * **Vector Store**: FAISS (`faiss-cpu`)
-* **Document Processing & Chunking**: `langchain-core`, `langchain-community`, `langchain-text-splitters`
-* **File Extractors**: `pypdf` (PDF), `python-docx` (DOCX), built-in Python I/O (TXT)
+* **RAG Orchestration**: `langchain`, `langchain-core`, `langchain-text-splitters`
+* **Frontend**: Streamlit
+* **Document Parsing**: `pypdf` (PDF), `python-docx` (DOCX), standard library (TXT)
 * **Configuration**: `python-dotenv`
 * **Testing**: Python `unittest`
 
@@ -69,16 +79,17 @@ User Natural Language Query → Query Vector → FAISS Similarity Search → Top
 ```text
 IntelliAssist-AI/
 ├── modules/
-│   ├── __init__.py                  # Core modules package exports
+│   ├── __init__.py                  # Core package exports (RAGPipeline, VectorStoreManager, etc.)
 │   ├── chunker.py                   # Configurable LangChain document chunking
 │   ├── document_loader.py           # Multi-format document loading (PDF, TXT, DOCX)
 │   ├── embeddings.py                # Hugging Face sentence-transformers embedding manager
 │   ├── preprocessor.py              # Text cleaning and Unicode normalization
+│   ├── rag_pipeline.py              # RAG pipeline with Gemini LLM, grounding prompts & citations
 │   ├── validator.py                 # File upload and content validation
 │   └── vector_store.py              # FAISS vector store and similarity search manager
 ├── utils/
 │   ├── __init__.py                  # Utility package exports
-│   └── helpers.py                   # Score formatting, color coding, and string helpers
+│   └── helpers.py                   # Score formatting, color coding, citation labels & string helpers
 ├── tests/
 │   ├── __init__.py                  # Test suite package
 │   ├── test_chunker.py              # Unit tests for text chunker
@@ -86,20 +97,21 @@ IntelliAssist-AI/
 │   ├── test_embeddings.py           # Unit tests for Hugging Face embeddings
 │   ├── test_pipeline.py             # Full ingestion & search pipeline integration tests
 │   ├── test_preprocessor.py         # Unit tests for text preprocessor
+│   ├── test_rag_pipeline.py         # Unit & integration tests for RAG pipeline & LLM grounding
 │   ├── test_validator.py            # Unit tests for document validator
 │   ├── test_vector_search_integration.py # Multi-document vector search tests
 │   └── test_vector_store.py         # Unit tests for FAISS vector store
 ├── .env.example                     # Environment configuration template
 ├── .gitignore                       # Git ignore rules
 ├── app.py                           # Streamlit web application entrypoint
-├── config.py                        # Centralized application and model configuration
+├── config.py                        # Centralized application, RAG, and model configuration
 ├── requirements.txt                 # Project dependencies
 └── README.md                        # Documentation
 ```
 
 ---
 
-## 🚀 Installation & Setup
+## ⚙️ Installation & Setup
 
 ### 1. Clone the Repository
 
@@ -108,16 +120,16 @@ git clone https://github.com/Ashish-Arjit/IntelliAssist-AI.git
 cd IntelliAssist-AI
 ```
 
-### 2. Create and Activate a Virtual Environment
+### 2. Set Up a Virtual Environment
 
 ```bash
-# Windows
-python -m venv .venv
-.venv\Scripts\activate
+python -m venv venv
 
-# Linux / macOS
-python3 -m venv .venv
-source .venv/bin/activate
+# Windows (Command Prompt / PowerShell)
+.\venv\Scripts\activate
+
+# macOS / Linux
+source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
@@ -126,40 +138,60 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables (Optional)
+### 4. Configure Environment Variables
+
+Copy `.env.example` to `.env` and set your Google Gemini API key:
 
 ```bash
 cp .env.example .env
 ```
 
+Edit `.env`:
+
+```env
+GOOGLE_API_KEY=your_actual_google_api_key_here
+LLM_PROVIDER=gemini
+LLM_MODEL_NAME=gemini-3.6-flash
+LLM_TEMPERATURE=0.2
+LLM_MAX_OUTPUT_TOKENS=1024
+DEFAULT_TOP_K=4
+DEFAULT_CHUNK_SIZE=1000
+DEFAULT_CHUNK_OVERLAP=200
+```
+
+> **Note**: Get a free API key from [Google AI Studio](https://aistudio.google.com/). The API key can also be provided directly through the Streamlit sidebar at runtime.
+
 ---
 
-## 💻 Running the Application
+## 🚀 Running the Application
 
-Start the Streamlit application:
+Launch the Streamlit web application:
 
 ```bash
 streamlit run app.py
 ```
 
-The application will launch locally at `http://localhost:8501`.
+Open your browser at `http://localhost:8501`.
 
----
-
-## 🔍 How to Perform Semantic Search
-
-1. **Upload Documents**: Select one or more `.pdf`, `.txt`, or `.docx` files using the sidebar file uploader.
-2. **Configure Parameters (Optional)**: Adjust chunk size, overlap, or the top-K retrieved results in the sidebar.
-3. **Automatic Indexing**: The application extracts text, normalizes content, generates chunk embeddings using `all-MiniLM-L6-v2`, and constructs the FAISS vector index.
-4. **Enter Search Query**: Type any natural language question or topic in the **Semantic Similarity Search** input field (e.g., *"What were the quarterly financial highlights?"* or *"Explain cloud architecture"*).
-5. **Inspect Retrieved Results**: Review ranked chunks with relevance percentage scores, document origins, page numbers, and exact chunk text.
+### Using the Document Chatbot:
+1. **Upload Documents**: Upload one or more PDF, TXT, or DOCX files using the sidebar.
+2. **Review Ingestion**: Ingestion metrics bar displays processed files, sections, and FAISS vector count.
+3. **Ask Questions**: Use the **Document Chatbot** tab to enter questions about your files.
+4. **Inspect Answers & Citations**: Read the grounded AI answer and expand the **View Source Citations** panel to see the exact document, page number, relevance score, and content snippet.
+5. **Inspect Vectors**: Switch to the **Semantic Search** or **Indexed Chunks** tabs to explore underlying vector distances and chunk breakdowns.
 
 ---
 
 ## 🧪 Running Automated Tests
 
-Run the complete test suite using `unittest`:
+Run the test suite across all modules and the RAG pipeline:
 
 ```bash
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests
+```
+
+To run only the RAG pipeline test suite:
+
+```bash
+python -m unittest tests/test_rag_pipeline.py
 ```
