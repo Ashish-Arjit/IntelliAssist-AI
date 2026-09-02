@@ -8,6 +8,7 @@ from modules.validator import DocumentValidator, ValidationResult
 from modules.vector_store import VectorStoreManager
 from modules.rag_pipeline import RAGPipeline
 from modules.summarization import DocumentSummarizer
+from modules.sentiment import SentimentAnalyzer
 
 __all__ = [
     "DocumentLoader",
@@ -19,6 +20,7 @@ __all__ = [
     "VectorStoreManager",
     "RAGPipeline",
     "DocumentSummarizer",
+    "SentimentAnalyzer",
 ]
 
 

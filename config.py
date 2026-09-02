@@ -59,3 +59,8 @@ SUMMARY_STYLES: list[str] = [
 MAX_DIRECT_SUMMARY_CHARS: int = int(os.getenv("MAX_DIRECT_SUMMARY_CHARS", 12000))
 SUMMARY_CHUNK_SIZE: int = int(os.getenv("SUMMARY_CHUNK_SIZE", 4000))
 
+# Sentiment Analysis Configuration
+DEFAULT_SENTIMENT_MODEL: str = os.getenv(
+    "SENTIMENT_MODEL_NAME", "cardiffnlp/twitter-roberta-base-sentiment-latest"
+)
+

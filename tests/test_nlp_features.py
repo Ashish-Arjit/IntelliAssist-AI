@@ -173,5 +173,71 @@ class TestDocumentSummarizer(unittest.TestCase):
         self.assertEqual(res["summary"], "This document provides an executive summary of machine learning workflows.")
 
 
+class TestSentimentAnalyzer(unittest.TestCase):
+    """Test suite for SentimentAnalyzer classification, confidence, and fallback logic."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from modules.sentiment import SentimentAnalyzer
+        self.analyzer = SentimentAnalyzer()
+
+    def test_normalize_label(self):
+        """Verify label normalization across various Hugging Face output conventions."""
+        self.assertEqual(self.analyzer.normalize_label("positive"), "Positive")
+        self.assertEqual(self.analyzer.normalize_label("POS"), "Positive")
+        self.assertEqual(self.analyzer.normalize_label("LABEL_2"), "Positive")
+        self.assertEqual(self.analyzer.normalize_label("negative"), "Negative")
+        self.assertEqual(self.analyzer.normalize_label("NEG"), "Negative")
+        self.assertEqual(self.analyzer.normalize_label("LABEL_0"), "Negative")
+        self.assertEqual(self.analyzer.normalize_label("neutral"), "Neutral")
+        self.assertEqual(self.analyzer.normalize_label("LABEL_1"), "Neutral")
+
+    def test_analyze_empty_text(self):
+        """Verify empty text produces warning and default neutral sentiment."""
+        res = self.analyzer.analyze("")
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["sentiment"], "Neutral")
+        self.assertEqual(res["confidence"], 0.0)
+
+    def test_analyze_lexicon_positive(self):
+        """Verify lexicon analysis detects positive tone with confidence."""
+        res = self.analyzer.analyze_lexicon("This system achieved remarkable growth, impressive profit, and great success.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["sentiment"], "Positive")
+        self.assertGreater(res["confidence"], 0.5)
+
+    def test_analyze_lexicon_negative(self):
+        """Verify lexicon analysis detects negative tone with confidence."""
+        res = self.analyzer.analyze_lexicon("The company experienced a severe loss, critical failure, and terrible damage.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["sentiment"], "Negative")
+        self.assertGreater(res["confidence"], 0.5)
+
+    def test_analyze_lexicon_neutral(self):
+        """Verify lexicon analysis classifies factual/objective text as neutral."""
+        res = self.analyzer.analyze_lexicon("The meeting is scheduled on Tuesday at two in the conference room.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["sentiment"], "Neutral")
+        self.assertGreaterEqual(res["confidence"], 0.5)
+
+    def test_analyze_with_mocked_transformer_pipeline(self):
+        """Verify end-to-end analyze handles Hugging Face pipeline predictions."""
+        mock_pipeline = MagicMock()
+        mock_pipeline.return_value = [
+            {"label": "positive", "score": 0.945},
+            {"label": "neutral", "score": 0.040},
+            {"label": "negative", "score": 0.015},
+        ]
+        self.analyzer._pipeline = mock_pipeline
+        self.analyzer._initialization_attempted = True
+
+        res = self.analyzer.analyze("The project achieved all development goals ahead of schedule.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["sentiment"], "Positive")
+        self.assertEqual(res["confidence"], 0.945)
+        self.assertEqual(res["method"], "Hugging Face Transformer")
+        self.assertIn("Positive", res["scores"])
+
+
 if __name__ == "__main__":
     unittest.main()
