@@ -64,3 +64,11 @@ DEFAULT_SENTIMENT_MODEL: str = os.getenv(
     "SENTIMENT_MODEL_NAME", "cardiffnlp/twitter-roberta-base-sentiment-latest"
 )
 
+# Intent Analysis Configuration
+INTENT_CATEGORIES: list[str] = [
+    "Question",
+    "Summary Request",
+    "Information Search",
+    "Explanation Request",
+]
+

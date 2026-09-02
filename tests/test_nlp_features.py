@@ -239,5 +239,60 @@ class TestSentimentAnalyzer(unittest.TestCase):
         self.assertIn("Positive", res["scores"])
 
 
+class TestIntentAnalyzer(unittest.TestCase):
+    """Test suite for query intent analysis and classification."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from modules.intent import IntentAnalyzer
+        self.analyzer = IntentAnalyzer()
+
+    def test_required_query_what_is_this_document_about(self):
+        """Verify: 'What is this document about?' -> Question."""
+        res = self.analyzer.analyze("What is this document about?")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Question")
+        self.assertGreaterEqual(res["confidence"], 0.85)
+
+    def test_required_query_summarize_this_document(self):
+        """Verify: 'Summarize this document.' -> Summary Request."""
+        res = self.analyzer.analyze("Summarize this document.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Summary Request")
+        self.assertGreaterEqual(res["confidence"], 0.90)
+
+    def test_required_query_find_information_about_machine_learning(self):
+        """Verify: 'Find information about machine learning.' -> Information Search."""
+        res = self.analyzer.analyze("Find information about machine learning.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Information Search")
+        self.assertGreaterEqual(res["confidence"], 0.90)
+
+    def test_required_query_explain_the_main_concept_in_this_document(self):
+        """Verify: 'Explain the main concept in this document.' -> Explanation Request."""
+        res = self.analyzer.analyze("Explain the main concept in this document.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Explanation Request")
+        self.assertGreaterEqual(res["confidence"], 0.90)
+
+    def test_empty_query_handling(self):
+        """Verify empty query handling returns default warning."""
+        res = self.analyzer.analyze("")
+        self.assertEqual(res["status"], "warning")
+        self.assertEqual(res["confidence"], 0.0)
+
+    def test_question_with_trailing_mark(self):
+        """Verify queries ending with ? default to Question."""
+        res = self.analyzer.analyze("Revenue growth rate?")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Question")
+
+    def test_search_keywords_fallback(self):
+        """Verify unstructured search terms default to Information Search."""
+        res = self.analyzer.analyze("cloud container architecture")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["intent"], "Information Search")
+
+
 if __name__ == "__main__":
     unittest.main()

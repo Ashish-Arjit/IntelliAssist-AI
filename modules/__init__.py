@@ -9,6 +9,7 @@ from modules.vector_store import VectorStoreManager
 from modules.rag_pipeline import RAGPipeline
 from modules.summarization import DocumentSummarizer
 from modules.sentiment import SentimentAnalyzer
+from modules.intent import IntentAnalyzer
 
 __all__ = [
     "DocumentLoader",
@@ -21,6 +22,7 @@ __all__ = [
     "RAGPipeline",
     "DocumentSummarizer",
     "SentimentAnalyzer",
+    "IntentAnalyzer",
 ]
 
 
