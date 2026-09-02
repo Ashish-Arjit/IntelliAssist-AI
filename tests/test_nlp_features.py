@@ -93,5 +93,85 @@ class TestConversationHistory(unittest.TestCase):
         self.assertEqual(clear_chat_history([]), [])
 
 
+class TestDocumentSummarizer(unittest.TestCase):
+    """Test suite for DocumentSummarizer methods, chunking, and fallback logic."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        from modules.summarization import DocumentSummarizer
+        self.summarizer = DocumentSummarizer(api_key="test_api_key_12345")
+
+    def test_extract_text_content_varied_inputs(self):
+        """Verify extraction from raw string, Document list, and empty input."""
+        from langchain_core.documents import Document
+        # Raw string
+        self.assertEqual(self.summarizer.extract_text_content("Simple text"), "Simple text")
+        # Empty
+        self.assertEqual(self.summarizer.extract_text_content(""), "")
+        self.assertEqual(self.summarizer.extract_text_content([]), "")
+        # Document objects
+        docs = [
+            Document(page_content="Section 1 content.", metadata={"page": 1}),
+            Document(page_content="Section 2 content.", metadata={"page": 2}),
+        ]
+        extracted = self.summarizer.extract_text_content(docs)
+        self.assertIn("Section 1 content.", extracted)
+        self.assertIn("Section 2 content.", extracted)
+
+    def test_split_into_summary_chunks(self):
+        """Verify chunking splits text sensibly by character boundaries."""
+        sample_para = "This is a meaningful paragraph for summarization. " * 20
+        full_text = "\n\n".join([sample_para, sample_para, sample_para])
+        chunks = self.summarizer.split_into_summary_chunks(full_text, chunk_size=500)
+        self.assertGreater(len(chunks), 1)
+        for c in chunks:
+            self.assertLessEqual(len(c), 700)
+
+    def test_extractive_fallback_summary(self):
+        """Verify frequency-based fallback produces concise coherent summary."""
+        long_text = (
+            "Machine learning is a method of data analysis that automates analytical model building. "
+            "It is a branch of artificial intelligence based on the idea that systems can learn from data. "
+            "Systems can identify patterns and make decisions with minimal human intervention. "
+            "Because of new computing technologies, machine learning today is not like machine learning of the past. "
+            "It was born from pattern recognition and the theory that computers can learn without being programmed."
+        )
+        summary = self.summarizer.extractive_fallback_summary(long_text, max_sentences=2)
+        self.assertTrue(len(summary) > 0)
+        self.assertIn("machine learning", summary.lower())
+
+    def test_summarize_empty_document(self):
+        """Verify summarizer handles empty content gracefully."""
+        res = self.summarizer.summarize("")
+        self.assertEqual(res["status"], "warning")
+        self.assertIn("No document content provided", res["summary"])
+
+    def test_summarize_no_api_key_uses_extractive_fallback(self):
+        """Verify summarizer falls back to extractive mode when API key is missing."""
+        from modules.summarization import DocumentSummarizer
+        no_key_summarizer = DocumentSummarizer(api_key="")
+        res = no_key_summarizer.summarize("Artificial intelligence is transforming modern workflows rapidly.")
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["method"], "extractive_fallback")
+        self.assertIn("Extractive Document Summary", res["summary"])
+
+    @patch("modules.summarization.ChatGoogleGenerativeAI")
+    def test_summarize_direct_llm_mock(self, mock_gemini_cls):
+        """Verify direct single-pass LLM summarization flow."""
+        mock_llm = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.content = "This document provides an executive summary of machine learning workflows."
+        mock_llm.invoke.return_value = mock_resp
+        mock_gemini_cls.return_value = mock_llm
+
+        res = self.summarizer.summarize(
+            "Machine learning enables automated pattern recognition across massive datasets.",
+            style="Executive Summary",
+        )
+        self.assertEqual(res["status"], "success")
+        self.assertEqual(res["method"], "llm_direct")
+        self.assertEqual(res["summary"], "This document provides an executive summary of machine learning workflows.")
+
+
 if __name__ == "__main__":
     unittest.main()

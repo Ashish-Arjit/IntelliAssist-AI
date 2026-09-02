@@ -7,6 +7,7 @@ from modules.preprocessor import TextPreprocessor
 from modules.validator import DocumentValidator, ValidationResult
 from modules.vector_store import VectorStoreManager
 from modules.rag_pipeline import RAGPipeline
+from modules.summarization import DocumentSummarizer
 
 __all__ = [
     "DocumentLoader",
@@ -17,6 +18,7 @@ __all__ = [
     "EmbeddingManager",
     "VectorStoreManager",
     "RAGPipeline",
+    "DocumentSummarizer",
 ]
 
 

@@ -49,3 +49,13 @@ MISSING_API_KEY_MESSAGE: str = (
     "LLM API key not detected. Please configure GOOGLE_API_KEY in your environment or .env file."
 )
 
+# Summarization Configuration
+DEFAULT_SUMMARY_STYLE: str = "Executive Summary"
+SUMMARY_STYLES: list[str] = [
+    "Executive Summary",
+    "Key Points / Bullet Points",
+    "Comprehensive Overview",
+]
+MAX_DIRECT_SUMMARY_CHARS: int = int(os.getenv("MAX_DIRECT_SUMMARY_CHARS", 12000))
+SUMMARY_CHUNK_SIZE: int = int(os.getenv("SUMMARY_CHUNK_SIZE", 4000))
+
