@@ -2,6 +2,7 @@
 
 from utils.helpers import (
     build_chat_message,
+    clear_chat_history,
     clean_query_text,
     export_chat_history,
     format_citation_label,
@@ -21,5 +22,6 @@ __all__ = [
     "format_citation_label",
     "format_conversation_timestamp",
     "build_chat_message",
+    "clear_chat_history",
     "export_chat_history",
 ]

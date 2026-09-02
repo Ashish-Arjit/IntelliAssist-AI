@@ -141,6 +141,19 @@ def build_chat_message(
         "intent": intent,
         "timestamp": timestamp or format_conversation_timestamp(),
     }
+def clear_chat_history(messages: Optional[list] = None) -> list:
+    """Clear and reset session conversation history.
+
+    Args:
+        messages: Optional reference to the current messages list.
+
+    Returns:
+        Empty list representing a cleared conversation history.
+    """
+    if messages is not None and isinstance(messages, list):
+        messages.clear()
+    return []
+
 
 
 def export_chat_history(messages: list) -> str:

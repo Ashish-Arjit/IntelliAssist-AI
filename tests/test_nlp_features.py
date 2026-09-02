@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from utils.helpers import (
     build_chat_message,
     clean_query_text,
+    clear_chat_history,
     export_chat_history,
     format_conversation_timestamp,
 )
@@ -75,6 +76,21 @@ class TestConversationHistory(unittest.TestCase):
         self.assertIn("Hello! How can I help you?", transcript)
         self.assertIn("doc.pdf", transcript)
         self.assertIn("Page 1", transcript)
+
+    def test_clear_chat_history_clears_list(self):
+        """Verify clear_chat_history resets messages list in place."""
+        messages = [
+            build_chat_message("user", "Query 1"),
+            build_chat_message("assistant", "Answer 1"),
+        ]
+        result = clear_chat_history(messages)
+        self.assertEqual(len(messages), 0)
+        self.assertEqual(result, [])
+
+    def test_clear_chat_history_none_or_empty(self):
+        """Verify clear_chat_history safely handles None and empty lists."""
+        self.assertEqual(clear_chat_history(None), [])
+        self.assertEqual(clear_chat_history([]), [])
 
 
 if __name__ == "__main__":

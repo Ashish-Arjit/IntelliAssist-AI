@@ -31,6 +31,7 @@ from modules.vector_store import VectorStoreManager
 from utils.helpers import (
     build_chat_message,
     clean_query_text,
+    clear_chat_history,
     export_chat_history,
     format_citation_label,
     format_conversation_timestamp,
@@ -264,6 +265,7 @@ with st.sidebar:
 
     st.divider()
     if st.button("🗑️ Clear Chat History", use_container_width=True):
+        clear_chat_history(st.session_state["messages"])
         st.session_state["messages"] = []
         st.rerun()
 
@@ -511,6 +513,30 @@ else:
     with main_tab_chat:
         st.subheader("💬 Ask Your Documents")
         st.caption("Enter questions below. The assistant retrieves relevant chunks from your documents and synthesizes grounded answers with citations.")
+
+        # Chat controls toolbar
+        chat_bar_col1, chat_bar_col2, chat_bar_col3 = st.columns([3, 1, 1])
+        with chat_bar_col1:
+            msg_count = len(st.session_state["messages"])
+            st.caption(f"Session history: **{msg_count}** turn{'s' if msg_count != 1 else ''}")
+        with chat_bar_col2:
+            if st.button("🗑️ Clear Chat", key="btn_clear_chat_tab", use_container_width=True, disabled=(msg_count == 0)):
+                clear_chat_history(st.session_state["messages"])
+                st.session_state["messages"] = []
+                st.rerun()
+        with chat_bar_col3:
+            transcript_text = export_chat_history(st.session_state["messages"])
+            st.download_button(
+                label="📥 Export Chat",
+                data=transcript_text,
+                file_name="intelliassist_chat_transcript.md",
+                mime="text/markdown",
+                use_container_width=True,
+                disabled=(msg_count == 0),
+                key="btn_export_chat_transcript",
+            )
+
+        st.divider()
 
         # Display previous chat messages
         for msg in st.session_state["messages"]:
