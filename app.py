@@ -14,18 +14,21 @@ from config import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
+    DEFAULT_SUMMARY_STYLE,
     DEFAULT_TOP_K,
     MAX_TOP_K,
     MIN_TOP_K,
     NO_CONTEXT_FOUND_MESSAGE,
     NO_DOCUMENTS_MESSAGE,
     MISSING_API_KEY_MESSAGE,
+    SUMMARY_STYLES,
 )
 from modules.chunker import DocumentChunker
 from modules.document_loader import DocumentLoader
 from modules.embeddings import EmbeddingManager
 from modules.preprocessor import TextPreprocessor
 from modules.rag_pipeline import RAGPipeline
+from modules.summarization import DocumentSummarizer
 from modules.validator import DocumentValidator
 from modules.vector_store import VectorStoreManager
 from utils.helpers import (
@@ -183,6 +186,9 @@ if "messages" not in st.session_state:
 
 if "last_processed_files" not in st.session_state:
     st.session_state["last_processed_files"] = []
+
+if "summary_result" not in st.session_state:
+    st.session_state["summary_result"] = None
 
 
 # ---------------------------------------------------------
@@ -503,8 +509,14 @@ else:
     # ---------------------------------------------------------
     # Main Tabs: Chat Assistant & Vector Inspection
     # ---------------------------------------------------------
-    main_tab_chat, main_tab_search, main_tab_chunks, main_tab_meta = st.tabs(
-        ["💬 Document Chatbot", "🔍 Semantic Search", "🧩 Indexed Chunks", "🔍 Metadata & Pipeline Summary"]
+    main_tab_chat, main_tab_summary, main_tab_search, main_tab_chunks, main_tab_meta = st.tabs(
+        [
+            "💬 Document Chatbot",
+            "📝 Document Summarization",
+            "🔍 Semantic Search",
+            "🧩 Indexed Chunks",
+            "🔍 Metadata & Pipeline Summary",
+        ]
     )
 
     # ---------------------------------------------------------
@@ -673,7 +685,101 @@ else:
                     )
 
     # ---------------------------------------------------------
-    # TAB 2: Semantic Similarity Search (Preserved)
+    # TAB 2: Document Summarization Interface
+    # ---------------------------------------------------------
+    with main_tab_summary:
+        st.subheader("📝 Document Summarization")
+        st.caption("Generate AI-powered summaries of your uploaded documents with multi-style control and large-document handling.")
+
+        if not all_preprocessed_docs:
+            st.info("Please upload and process at least one document to generate a summary.")
+        else:
+            doc_file_names = sorted(list({
+                d.metadata.get("file_name", "Document")
+                for d in all_preprocessed_docs
+                if d.metadata and "file_name" in d.metadata
+            }))
+
+            scope_options = ["All Uploaded Documents"] + doc_file_names
+            sum_col1, sum_col2 = st.columns([2, 2])
+            with sum_col1:
+                selected_scope = st.selectbox(
+                    "Select Document Scope",
+                    options=scope_options,
+                    index=0,
+                    help="Summarize all documents combined or choose a specific document.",
+                    key="select_summary_scope",
+                )
+            with sum_col2:
+                selected_style = st.selectbox(
+                    "Summary Style",
+                    options=SUMMARY_STYLES,
+                    index=0,
+                    help="Choose the style and depth of the generated summary.",
+                    key="select_summary_style",
+                )
+
+            # Filter documents according to selected scope
+            if selected_scope == "All Uploaded Documents":
+                target_docs = all_preprocessed_docs
+            else:
+                target_docs = [
+                    d for d in all_preprocessed_docs
+                    if d.metadata.get("file_name") == selected_scope
+                ]
+
+            total_scope_words = sum(len(d.page_content.split()) for d in target_docs)
+            total_scope_chars = sum(len(d.page_content) for d in target_docs)
+
+            st.caption(f"Target scope: **{len(target_docs)}** section(s), **{total_scope_words:,}** words (~{total_scope_chars:,} characters)")
+
+            generate_summary_btn = st.button("✨ Generate Document Summary", type="primary", use_container_width=True, key="btn_generate_summary")
+
+            if generate_summary_btn:
+                summarizer = DocumentSummarizer(
+                    model_name=DEFAULT_LLM_MODEL,
+                    api_key=active_api_key,
+                )
+
+                with st.spinner(f"Generating {selected_style}..."):
+                    summary_output = summarizer.summarize(target_docs, style=selected_style)
+                    st.session_state["summary_result"] = summary_output
+
+            # Display generated summary if present in session
+            current_sum = st.session_state.get("summary_result")
+            if current_sum:
+                st.divider()
+                stat_col1, stat_col2, stat_col3 = st.columns(3)
+                with stat_col1:
+                    st.metric("Summary Style", current_sum.get("style", "Summary"))
+                with stat_col2:
+                    mode_label = "AI Synthesized (Gemini)" if "llm" in current_sum.get("method", "") else "Extractive NLP Fallback"
+                    st.metric("Generation Method", mode_label)
+                with stat_col3:
+                    st.metric("Processed Chunks", current_sum.get("chunks_processed", 1))
+
+                st.markdown(
+                    f"""
+                    <div style="background-color: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 10px; padding: 1.5rem; margin-top: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                        <h4 style="color: #1E293B; margin-bottom: 0.75rem;">📋 {current_sum.get('style', 'Summary')}</h4>
+                        <div style="font-size: 0.95rem; line-height: 1.6; color: #334155; white-space: pre-wrap;">{current_sum.get('summary', '')}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                st.write("")
+                st.download_button(
+                    label="📥 Download Summary (.md)",
+                    data=current_sum.get("summary", ""),
+                    file_name=f"intelliassist_summary_{selected_style.lower().replace(' ', '_').replace('/', '_')}.md",
+                    mime="text/markdown",
+                    use_container_width=True,
+                    key="btn_download_summary",
+                )
+
+    # ---------------------------------------------------------
+    # TAB 3: Semantic Similarity Search (Preserved)
     # ---------------------------------------------------------
     with main_tab_search:
         st.subheader("🔍 FAISS Semantic Similarity Search")
