@@ -14,8 +14,10 @@ from config import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
+    DEFAULT_SENTIMENT_MODEL,
     DEFAULT_SUMMARY_STYLE,
     DEFAULT_TOP_K,
+    INTENT_CATEGORIES,
     MAX_TOP_K,
     MIN_TOP_K,
     NO_CONTEXT_FOUND_MESSAGE,
@@ -26,8 +28,10 @@ from config import (
 from modules.chunker import DocumentChunker
 from modules.document_loader import DocumentLoader
 from modules.embeddings import EmbeddingManager
+from modules.intent import IntentAnalyzer
 from modules.preprocessor import TextPreprocessor
 from modules.rag_pipeline import RAGPipeline
+from modules.sentiment import SentimentAnalyzer
 from modules.summarization import DocumentSummarizer
 from modules.validator import DocumentValidator
 from modules.vector_store import VectorStoreManager
@@ -178,6 +182,18 @@ def get_embedding_manager(model_name: str = DEFAULT_EMBEDDING_MODEL) -> Embeddin
     return EmbeddingManager(model_name=model_name)
 
 
+@st.cache_resource(show_spinner="Loading Hugging Face sentiment model...")
+def get_sentiment_analyzer(model_name: str = DEFAULT_SENTIMENT_MODEL) -> SentimentAnalyzer:
+    """Initialize and cache the SentimentAnalyzer instance."""
+    return SentimentAnalyzer(model_name=model_name)
+
+
+@st.cache_resource
+def get_intent_analyzer() -> IntentAnalyzer:
+    """Initialize and cache the IntentAnalyzer instance."""
+    return IntentAnalyzer()
+
+
 # ---------------------------------------------------------
 # Initialize Session State
 # ---------------------------------------------------------
@@ -189,6 +205,12 @@ if "last_processed_files" not in st.session_state:
 
 if "summary_result" not in st.session_state:
     st.session_state["summary_result"] = None
+
+if "sentiment_result" not in st.session_state:
+    st.session_state["sentiment_result"] = None
+
+if "intent_test_result" not in st.session_state:
+    st.session_state["intent_test_result"] = None
 
 
 # ---------------------------------------------------------
@@ -507,15 +529,17 @@ else:
     st.write("")
 
     # ---------------------------------------------------------
-    # Main Tabs: Chat Assistant & Vector Inspection
+    # Main Tabs: Chat Assistant, NLP Features & Vector Inspection
     # ---------------------------------------------------------
-    main_tab_chat, main_tab_summary, main_tab_search, main_tab_chunks, main_tab_meta = st.tabs(
+    main_tab_chat, main_tab_summary, main_tab_sentiment, main_tab_intent, main_tab_search, main_tab_chunks, main_tab_meta = st.tabs(
         [
             "💬 Document Chatbot",
             "📝 Document Summarization",
+            "🎭 Sentiment Analysis",
+            "🎯 Intent Analysis",
             "🔍 Semantic Search",
             "🧩 Indexed Chunks",
-            "🔍 Metadata & Pipeline Summary",
+            "🔍 Metadata & Summary",
         ]
     )
 
@@ -554,9 +578,16 @@ else:
         for msg in st.session_state["messages"]:
             with st.chat_message(msg["role"]):
                 ts = msg.get("timestamp", "")
+                intent_data = msg.get("intent")
+                header_parts = []
+                if intent_data and intent_data.get("badge"):
+                    header_parts.append(f'<span class="badge badge-meta" style="font-size: 0.72rem;">{intent_data["badge"]}</span>')
                 if ts:
+                    header_parts.append(f'<span style="font-size: 0.75rem; color: #94A3B8;">{ts}</span>')
+
+                if header_parts:
                     st.markdown(
-                        f'<div style="font-size: 0.75rem; color: #94A3B8; text-align: right; margin-top: -8px;">{ts}</div>',
+                        f'<div style="display: flex; justify-content: space-between; align-items: center; margin-top: -8px; margin-bottom: 4px;">{"".join(header_parts)}</div>',
                         unsafe_allow_html=True,
                     )
                 st.markdown(msg["content"])
@@ -601,11 +632,19 @@ else:
         if user_query:
             cleaned_q = clean_query_text(user_query)
 
-            # Display user message immediately
+            # Analyze query intent in real time
+            intent_analyzer = get_intent_analyzer()
+            intent_info = intent_analyzer.analyze(cleaned_q)
+
+            # Display user message immediately with intent badge
             with st.chat_message("user"):
+                st.markdown(
+                    f'<div style="margin-top: -8px; margin-bottom: 4px;"><span class="badge badge-meta" style="font-size: 0.72rem;">{intent_info["badge"]}</span></div>',
+                    unsafe_allow_html=True,
+                )
                 st.markdown(cleaned_q)
             st.session_state["messages"].append(
-                build_chat_message(role="user", content=cleaned_q)
+                build_chat_message(role="user", content=cleaned_q, intent=intent_info)
             )
 
             # Check API Key before execution
@@ -779,7 +818,228 @@ else:
                 )
 
     # ---------------------------------------------------------
-    # TAB 3: Semantic Similarity Search (Preserved)
+    # TAB 3: Document Sentiment Analysis Interface
+    # ---------------------------------------------------------
+    with main_tab_sentiment:
+        st.subheader("🎭 Document Sentiment Analysis")
+        st.caption("Evaluate document sentiment (Positive, Negative, Neutral) and confidence score using Hugging Face NLP.")
+
+        sentiment_source = st.radio(
+            "Sentiment Input Source",
+            options=["Uploaded Document Content", "Custom Text Excerpt"],
+            horizontal=True,
+            key="radio_sentiment_source",
+        )
+
+        text_for_sentiment = ""
+        if sentiment_source == "Uploaded Document Content":
+            if not all_preprocessed_docs:
+                st.info("Please upload at least one document to analyze its sentiment.")
+            else:
+                doc_file_names = sorted(list({
+                    d.metadata.get("file_name", "Document")
+                    for d in all_preprocessed_docs
+                    if d.metadata and "file_name" in d.metadata
+                }))
+                scope_options = ["All Uploaded Documents"] + doc_file_names
+                selected_doc = st.selectbox(
+                    "Select Document to Analyze",
+                    options=scope_options,
+                    index=0,
+                    key="select_sentiment_doc",
+                )
+
+                if selected_doc == "All Uploaded Documents":
+                    text_for_sentiment = "\n\n".join(d.page_content for d in all_preprocessed_docs)
+                else:
+                    text_for_sentiment = "\n\n".join(
+                        d.page_content for d in all_preprocessed_docs
+                        if d.metadata.get("file_name") == selected_doc
+                    )
+
+                with st.expander(f"📄 Preview Selected Text ({len(text_for_sentiment)} chars)", expanded=False):
+                    st.text(text_for_sentiment[:2000] + ("..." if len(text_for_sentiment) > 2000 else ""))
+        else:
+            # Custom text input with demonstration presets
+            preset_col1, preset_col2, preset_col3 = st.columns(3)
+            with preset_col1:
+                if st.button("🌟 Positive Sample", use_container_width=True, key="btn_pos_sample"):
+                    st.session_state["custom_sentiment_text"] = "The quarterly performance delivered exceptional results, outstanding revenue growth, and strong operational profits."
+            with preset_col2:
+                if st.button("⚠️ Negative Sample", use_container_width=True, key="btn_neg_sample"):
+                    st.session_state["custom_sentiment_text"] = "The system experienced a severe breakdown, catastrophic failure, and critical data loss."
+            with preset_col3:
+                if st.button("⚖️ Neutral Sample", use_container_width=True, key="btn_neu_sample"):
+                    st.session_state["custom_sentiment_text"] = "The advisory committee will convene on Thursday at 2:00 PM in Conference Room B."
+
+            custom_input = st.text_area(
+                "Enter text to analyze:",
+                value=st.session_state.get("custom_sentiment_text", ""),
+                height=130,
+                placeholder="Type or paste any document excerpt to evaluate its emotional tone...",
+                key="textarea_sentiment_input",
+            )
+            text_for_sentiment = custom_input
+
+        analyze_sentiment_btn = st.button(
+            "🔍 Analyze Sentiment",
+            type="primary",
+            use_container_width=True,
+            key="btn_run_sentiment_analysis",
+            disabled=(not text_for_sentiment.strip()),
+        )
+
+        if analyze_sentiment_btn:
+            sentiment_analyzer = get_sentiment_analyzer()
+            with st.spinner("Analyzing text sentiment with Hugging Face model..."):
+                s_res = sentiment_analyzer.analyze(text_for_sentiment)
+                st.session_state["sentiment_result"] = s_res
+
+        # Display Sentiment Results
+        sent_res = st.session_state.get("sentiment_result")
+        if sent_res and sent_res.get("status") in ("success", "warning"):
+            st.divider()
+            sent_label = sent_res.get("sentiment", "Neutral")
+            conf_val = float(sent_res.get("confidence", 0.0))
+            badge_color = "#10B981" if sent_label == "Positive" else ("#EF4444" if sent_label == "Negative" else "#64748B")
+            icon = "🟢" if sent_label == "Positive" else ("🔴" if sent_label == "Negative" else "⚪")
+
+            scol1, scol2, scol3 = st.columns(3)
+            with scol1:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Overall Sentiment</div>
+                        <div class="metric-value" style="color: {badge_color};">{icon} {sent_label}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with scol2:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Confidence Score</div>
+                        <div class="metric-value">{conf_val:.1%}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with scol3:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Model / Pipeline</div>
+                        <div class="metric-value" style="font-size: 1rem; color: #475569;">{sent_res.get('method', 'NLP Model')}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            st.write("")
+            score_dist = sent_res.get("scores", {})
+            if score_dist:
+                st.markdown("**Probability Distribution:**")
+                p_col1, p_col2, p_col3 = st.columns(3)
+                with p_col1:
+                    p_pos = score_dist.get("Positive", 0.0)
+                    st.caption(f"Positive: {p_pos:.1%}")
+                    st.progress(float(p_pos))
+                with p_col2:
+                    p_neu = score_dist.get("Neutral", 0.0)
+                    st.caption(f"Neutral: {p_neu:.1%}")
+                    st.progress(float(p_neu))
+                with p_col3:
+                    p_neg = score_dist.get("Negative", 0.0)
+                    st.caption(f"Negative: {p_neg:.1%}")
+                    st.progress(float(p_neg))
+
+    # ---------------------------------------------------------
+    # TAB 4: Query Intent Classification Interface
+    # ---------------------------------------------------------
+    with main_tab_intent:
+        st.subheader("🎯 Query Intent Classification")
+        st.caption("Identify user query purpose (Question, Summary Request, Information Search, Explanation Request) using NLP classification.")
+
+        st.markdown("**Quick-Test Sample Queries (Click to test):**")
+        tcol1, tcol2, tcol3, tcol4 = st.columns(4)
+        with tcol1:
+            if st.button("❓ What is this document about?", use_container_width=True, key="btn_sample_q1"):
+                st.session_state["intent_input_text"] = "What is this document about?"
+        with tcol2:
+            if st.button("📝 Summarize this document.", use_container_width=True, key="btn_sample_q2"):
+                st.session_state["intent_input_text"] = "Summarize this document."
+        with tcol3:
+            if st.button("🔍 Find info about machine learning.", use_container_width=True, key="btn_sample_q3"):
+                st.session_state["intent_input_text"] = "Find information about machine learning."
+        with tcol4:
+            if st.button("💡 Explain the main concept.", use_container_width=True, key="btn_sample_q4"):
+                st.session_state["intent_input_text"] = "Explain the main concept in this document."
+
+        current_intent_query = st.text_input(
+            "Query to analyze:",
+            value=st.session_state.get("intent_input_text", ""),
+            placeholder="Type any user query or question...",
+            key="input_intent_query_text",
+        )
+
+        classify_intent_btn = st.button("🎯 Classify Intent", type="primary", use_container_width=True, key="btn_classify_intent")
+
+        if classify_intent_btn or current_intent_query:
+            if not current_intent_query.strip():
+                st.warning("Please enter a non-empty query to analyze intent.")
+            else:
+                intent_analyzer = get_intent_analyzer()
+                detected = intent_analyzer.analyze(current_intent_query)
+                st.session_state["intent_test_result"] = detected
+
+        intent_res = st.session_state.get("intent_test_result")
+        if intent_res and intent_res.get("status") == "success":
+            st.divider()
+            icol1, icol2, icol3 = st.columns(3)
+            with icol1:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Detected Intent</div>
+                        <div class="metric-value" style="color: #4F46E5;">{intent_res.get('badge', '')}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with icol2:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Confidence Score</div>
+                        <div class="metric-value">{intent_res.get('confidence', 0.0):.1%}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            with icol3:
+                matched_kws = ", ".join(intent_res.get('matched_keywords', [])) or "None"
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-title">Matched Linguistic Markers</div>
+                        <div class="metric-value" style="font-size: 1.05rem; color: #334155;"><code>{matched_kws}</code></div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown(
+                f"""
+                <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                    <strong>Intent Description:</strong> {intent_res.get('description', '')}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    # ---------------------------------------------------------
+    # TAB 5: Semantic Similarity Search (Preserved)
     # ---------------------------------------------------------
     with main_tab_search:
         st.subheader("🔍 FAISS Semantic Similarity Search")
@@ -853,7 +1113,7 @@ else:
                         )
 
     # ---------------------------------------------------------
-    # TAB 3: Indexed Chunks Inspection (Preserved)
+    # TAB 6: Indexed Chunks Inspection (Preserved)
     # ---------------------------------------------------------
     with main_tab_chunks:
         st.subheader(f"All Indexed Chunks ({len(all_chunks)} total)")
@@ -889,10 +1149,10 @@ else:
                 )
 
     # ---------------------------------------------------------
-    # TAB 4: Metadata & Pipeline Summary (Preserved)
+    # TAB 7: Metadata & Pipeline Summary (Preserved & Enhanced)
     # ---------------------------------------------------------
     with main_tab_meta:
-        st.subheader("Metadata & RAG Architecture Summary")
+        st.subheader("Metadata & NLP Pipeline Summary")
         meta_summary = {
             "llm_provider": "Google Gemini",
             "llm_model": DEFAULT_LLM_MODEL,
@@ -900,6 +1160,9 @@ else:
             "embedding_model": DEFAULT_EMBEDDING_MODEL,
             "vector_dimension": embedding_manager.dimension,
             "total_vectors_in_faiss": vector_manager.total_vectors,
+            "sentiment_model": DEFAULT_SENTIMENT_MODEL,
+            "intent_categories": INTENT_CATEGORIES,
+            "summarization_styles": SUMMARY_STYLES,
             "total_documents": len(successful_files),
             "total_sections": len(all_preprocessed_docs),
             "total_chunks": len(all_chunks),
