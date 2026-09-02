@@ -29,8 +29,11 @@ from modules.rag_pipeline import RAGPipeline
 from modules.validator import DocumentValidator
 from modules.vector_store import VectorStoreManager
 from utils.helpers import (
+    build_chat_message,
     clean_query_text,
+    export_chat_history,
     format_citation_label,
+    format_conversation_timestamp,
     format_file_size,
     format_similarity_score,
     get_score_badge_color,
@@ -512,6 +515,12 @@ else:
         # Display previous chat messages
         for msg in st.session_state["messages"]:
             with st.chat_message(msg["role"]):
+                ts = msg.get("timestamp", "")
+                if ts:
+                    st.markdown(
+                        f'<div style="font-size: 0.75rem; color: #94A3B8; text-align: right; margin-top: -8px;">{ts}</div>',
+                        unsafe_allow_html=True,
+                    )
                 st.markdown(msg["content"])
                 
                 # Render source citations if available for assistant messages
@@ -557,19 +566,25 @@ else:
             # Display user message immediately
             with st.chat_message("user"):
                 st.markdown(cleaned_q)
-            st.session_state["messages"].append({"role": "user", "content": cleaned_q, "citations": []})
+            st.session_state["messages"].append(
+                build_chat_message(role="user", content=cleaned_q)
+            )
 
             # Check API Key before execution
             if not rag_pipeline.is_api_key_configured():
                 warning_ans = MISSING_API_KEY_MESSAGE
                 with st.chat_message("assistant"):
                     st.error(warning_ans)
-                st.session_state["messages"].append({"role": "assistant", "content": warning_ans, "citations": []})
+                st.session_state["messages"].append(
+                    build_chat_message(role="assistant", content=warning_ans)
+                )
             elif not vector_manager.is_initialized or vector_manager.total_vectors == 0:
                 warning_ans = NO_DOCUMENTS_MESSAGE
                 with st.chat_message("assistant"):
                     st.warning(warning_ans)
-                st.session_state["messages"].append({"role": "assistant", "content": warning_ans, "citations": []})
+                st.session_state["messages"].append(
+                    build_chat_message(role="assistant", content=warning_ans)
+                )
             else:
                 with st.chat_message("assistant"):
                     with st.spinner("Retrieving document chunks & generating grounded answer..."):
@@ -622,12 +637,14 @@ else:
                                     unsafe_allow_html=True,
                                 )
 
-                    # Append assistant response to session messages
-                    st.session_state["messages"].append({
-                        "role": "assistant",
-                        "content": answer_text,
-                        "citations": citations,
-                    })
+                    # Append assistant response to session messages with citations
+                    st.session_state["messages"].append(
+                        build_chat_message(
+                            role="assistant",
+                            content=answer_text,
+                            citations=citations,
+                        )
+                    )
 
     # ---------------------------------------------------------
     # TAB 2: Semantic Similarity Search (Preserved)

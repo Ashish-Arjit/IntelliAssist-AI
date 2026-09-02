@@ -104,3 +104,74 @@ def format_citation_label(file_name: str, page: Optional[int] = None, chunk_inde
         parts.append(f"Chunk #{chunk_index}")
     return " • ".join(parts)
 
+
+def format_conversation_timestamp() -> str:
+    """Return formatted current time string for conversation history turns.
+
+    Returns:
+        Formatted timestamp string (e.g. "05:32 PM").
+    """
+    from datetime import datetime
+    return datetime.now().strftime("%I:%M %p")
+
+
+def build_chat_message(
+    role: str,
+    content: str,
+    citations: Optional[list] = None,
+    intent: Optional[dict] = None,
+    timestamp: Optional[str] = None,
+) -> dict:
+    """Build a structured conversation history message entry.
+
+    Args:
+        role: Message author role ('user' or 'assistant').
+        content: Text content of the message.
+        citations: Optional list of document citation dictionaries.
+        intent: Optional detected intent dictionary.
+        timestamp: Optional formatted time string.
+
+    Returns:
+        Structured message dictionary for session state storage.
+    """
+    return {
+        "role": role,
+        "content": content,
+        "citations": citations or [],
+        "intent": intent,
+        "timestamp": timestamp or format_conversation_timestamp(),
+    }
+
+
+def export_chat_history(messages: list) -> str:
+    """Export conversation history messages into a clean text transcript.
+
+    Args:
+        messages: List of message dictionaries from session state.
+
+    Returns:
+        Clean plain text transcript string.
+    """
+    if not messages:
+        return "No conversation history available."
+
+    lines = ["# IntelliAssist AI - Conversation Transcript", ""]
+    for idx, msg in enumerate(messages, start=1):
+        role = "User" if msg.get("role") == "user" else "Assistant"
+        ts = msg.get("timestamp", "")
+        time_tag = f" [{ts}]" if ts else ""
+        lines.append(f"### Turn {idx}: {role}{time_tag}")
+        lines.append(msg.get("content", ""))
+
+        citations = msg.get("citations", [])
+        if citations:
+            lines.append("\nSources Cited:")
+            for cit in citations:
+                doc = cit.get("file_name", "Document")
+                page = f", Page {cit.get('page')}" if cit.get("page") is not None else ""
+                score = cit.get("similarity_score", 0.0)
+                lines.append(f"  - {doc}{page} (Score: {score:.1%})")
+        lines.append("")
+
+    return "\n".join(lines)
+

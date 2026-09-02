@@ -1,10 +1,15 @@
 """Utility helpers for IntelliAssist AI."""
 
 from utils.helpers import (
+    build_chat_message,
     clean_query_text,
+    export_chat_history,
+    format_citation_label,
+    format_conversation_timestamp,
     format_file_size,
     format_similarity_score,
     get_score_badge_color,
+    truncate_snippet,
 )
 
 __all__ = [
@@ -12,4 +17,9 @@ __all__ = [
     "get_score_badge_color",
     "format_file_size",
     "clean_query_text",
+    "truncate_snippet",
+    "format_citation_label",
+    "format_conversation_timestamp",
+    "build_chat_message",
+    "export_chat_history",
 ]
