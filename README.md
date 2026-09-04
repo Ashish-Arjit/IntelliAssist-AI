@@ -4,7 +4,22 @@ IntelliAssist AI is a modular, production-ready Document AI and Retrieval-Augmen
 
 ---
 
-## 📌 Complete Architecture & Pipeline Flow
+## 📌 Problem Statement & Solution Overview
+
+### Problem Statement
+Organizations and individuals frequently handle dense, multi-format documents (reports, contracts, manuals, financial disclosures). Manually searching through multiple files to extract relevant information is time-consuming and error-prone. Traditional keyword search often misses conceptual relevance, while standard LLMs suffer from hallucinations when asked about domain-specific or unindexed private documents.
+
+### Solution Overview
+IntelliAssist AI solves these challenges by combining:
+1. **Multi-Format Ingestion**: Unified text extraction and metadata preservation for PDF, TXT, and DOCX files.
+2. **Dense Semantic Search**: High-dimensional embeddings and an in-memory FAISS vector store that capture conceptual meaning rather than just exact keywords.
+3. **Strictly Grounded RAG Generation**: Constrained prompting instructing Google Gemini to synthesize answers strictly from retrieved document chunks, returning an explicit fallback message when information is absent.
+4. **Transparent Source Citations**: Every answer provides clickable source cards with file names, PDF page numbers, chunk indices, and relevance scores.
+5. **Integrated NLP Toolkit**: Multi-style document summarization (with large-document map-reduce), sentiment analysis, query intent classification, and multi-turn conversation memory.
+
+---
+
+## 🏗️ Complete Architecture & Workflow Pipeline
 
 ```text
                                 Uploaded Documents (PDF / TXT / DOCX)
@@ -31,26 +46,31 @@ IntelliAssist AI is a modular, production-ready Document AI and Retrieval-Augmen
                                                                 (Session Multi-Turn Memory)
 ```
 
+The complete execution lifecycle operates in sequential stages:
+```text
+Upload Document ──► Extract Text ──► Preprocess Text ──► Create Chunks ──► Generate Embeddings ──► Create FAISS Index ──► Semantic Search ──► Retrieve Context ──► Generate Grounded Answer ──► Display Citations
+```
+
 ---
 
 ## ✨ Key Features
 
 ### 1. 💬 Grounded Document Question Answering (RAG)
 * **Strict Grounding**: Answers are synthesized strictly from retrieved document chunks.
-* **Anti-Hallucination Guardrails**: Explicit fallback (`"I couldn't find this information in the uploaded documents."`) whenever relevant context is unavailable or insufficient.
+* **Anti-Hallucination Guardrails**: Explicit fallback (`"I couldn't find this information in the uploaded documents."`) whenever relevant context is unavailable, insufficient, or below the minimum similarity threshold.
 * **Verified Source Citations**: Collapsible citation cards displaying the source file, PDF page number, chunk index, relevance score badges (0%–100%), and snippet previews.
 
 ### 2. 🕒 Session Conversation History
 * **Multi-Turn Memory**: Preserves user questions, AI responses, timestamps, and citation metadata across interactions in Streamlit session state.
 * **Previous Messages Visible**: Full chat history remains accessible as users ask follow-up questions or explore tabs.
 * **Clear Conversation**: Easily clear session dialogue with a single click from the sidebar or chat toolbar.
-* **Transcript Export**: Download the full conversation session as a formatted Markdown transcript.
+* **Transcript Export**: Download the full conversation session as a formatted Markdown transcript (`intelliassist_chat_transcript.md`).
 
 ### 3. 📝 Document Summarization
 * **Upload-Grounded Summaries**: Generates comprehensive summaries based strictly on uploaded documents.
 * **Multiple Summary Styles**:
-  * **Executive Summary**: High-level synthesis of objectives, key findings, and conclusions.
-  * **Key Points / Bullet Points**: Structured, actionable core insights.
+  * **Executive Summary**: High-level synthesis of objectives, key findings, and overarching conclusions.
+  * **Key Points / Bullet Points**: Structured, actionable core insights with bulleted highlights.
   * **Comprehensive Overview**: Detailed section-by-section breakdown.
 * **Intelligent Large-Document Handling**: Automatically divides lengthy documents into structured chunks and uses a map-reduce synthesis flow to prevent token overflow.
 * **Offline Fallback**: Extractive NLP frequency-based summarization fallback when an LLM API key is not configured.
@@ -73,21 +93,22 @@ IntelliAssist AI is a modular, production-ready Document AI and Retrieval-Augmen
 ### 6. 📑 Multi-Format Ingestion & FAISS Vector Search
 * **Multi-Format Processing**: Simultaneous ingestion of **PDF** (`pypdf`), **DOCX** (`python-docx`), and **TXT** files.
 * **Hugging Face Sentence Transformers**: High-performance open-source `sentence-transformers/all-MiniLM-L6-v2` generating 384-dimensional dense embeddings.
-* **In-Memory FAISS Vector Store**: Fast L2/Inner-Product similarity search with normalized percentage scores.
+* **In-Memory FAISS Vector Store**: Fast L2 similarity search with normalized percentage relevance score calculation (`1 - (distance^2 / 2)`).
+* **Smart Session Caching**: Vector store and document chunks are cached in Streamlit session state, eliminating redundant embedding computations on user interactions.
 
 ---
 
 ## 🛠️ Technology Stack
 
-* **Core Framework**: Python 3.10+
-* **LLM Engine**: Google Gemini (`gemini-3.6-flash` via `langchain-google-genai`)
-* **Embeddings**: Hugging Face Sentence Transformers (`all-MiniLM-L6-v2` via `langchain-huggingface`)
+* **Programming Language**: Python 3.10+
+* **LLM Engine**: Google Gemini (`gemini-1.5-flash` via `langchain-google-genai`)
+* **Embedding Model**: Hugging Face Sentence Transformers (`all-MiniLM-L6-v2` via `langchain-huggingface`)
 * **Vector Store**: FAISS (`faiss-cpu`)
-* **NLP & Sentiment**: Hugging Face Transformers (`transformers`, `torch`), Lexicon NLP
+* **NLP & Sentiment**: Hugging Face Transformers (`transformers`), Rule-Based Lexicon NLP
 * **RAG Orchestration**: `langchain`, `langchain-core`, `langchain-text-splitters`
 * **Web UI**: Streamlit
-* **Document Loaders**: `pypdf`, `python-docx`
-* **Testing**: Python standard library `unittest`
+* **Document Processing**: `pypdf`, `python-docx`
+* **Testing**: Python standard library `unittest`, `pytest`
 
 ---
 
@@ -96,9 +117,9 @@ IntelliAssist AI is a modular, production-ready Document AI and Retrieval-Augmen
 ```text
 IntelliAssist-AI/
 ├── modules/
-│   ├── __init__.py                  # Exports all core modules
+│   ├── __init__.py                  # Public exports for core modules
 │   ├── chunker.py                   # Recursive text chunking with metadata preservation
-│   ├── document_loader.py           # Multi-format document loading (PDF, TXT, DOCX)
+│   ├── document_loader.py           # Multi-format document loading (PDF, TXT, DOCX) & error handling
 │   ├── embeddings.py                # Hugging Face embedding manager (all-MiniLM-L6-v2)
 │   ├── intent.py                    # Query intent classification (Question, Summary, Search, Explain)
 │   ├── preprocessor.py              # Text cleaning and Unicode normalization
@@ -113,20 +134,20 @@ IntelliAssist-AI/
 ├── tests/
 │   ├── __init__.py                  # Test suite package
 │   ├── test_chunker.py              # Unit tests for text chunker
-│   ├── test_document_loader.py      # Unit tests for loaders (PDF, TXT, DOCX)
+│   ├── test_document_loader.py      # Unit tests for loaders & corrupted file handling
 │   ├── test_embeddings.py           # Unit tests for Hugging Face embeddings
-│   ├── test_nlp_features.py         # Unit tests for conversation history, summarization, sentiment & intent
-│   ├── test_pipeline.py             # Ingestion & search integration tests
+│   ├── test_nlp_features.py         # Unit tests for history, summarization, sentiment & intent
+│   ├── test_pipeline.py             # End-to-end multi-format ingestion & search tests
 │   ├── test_preprocessor.py         # Unit tests for text preprocessor
 │   ├── test_rag_pipeline.py         # Unit & integration tests for RAG pipeline & LLM grounding
 │   ├── test_validator.py            # Unit tests for document validator
-│   ├── test_vector_search_integration.py # Multi-document vector search tests
+│   ├── test_vector_search_integration.py # Multi-document concurrent vector search tests
 │   └── test_vector_store.py         # Unit tests for FAISS vector store
 ├── .env.example                     # Environment configuration template
-├── .gitignore                       # Git ignore rules
-├── app.py                           # Multi-tab Streamlit web application
+├── .gitignore                       # Git ignore rules (protects .env and secrets)
+├── app.py                           # Multi-tab Streamlit web application with session caching
 ├── config.py                        # Centralized application, NLP, and model configuration
-├── requirements.txt                 # Project dependencies
+├── requirements.txt                 # Complete project dependencies
 └── README.md                        # Project documentation
 ```
 
@@ -172,15 +193,16 @@ Edit `.env`:
 ```env
 GOOGLE_API_KEY=your_actual_google_api_key_here
 LLM_PROVIDER=gemini
-LLM_MODEL_NAME=gemini-3.6-flash
+LLM_MODEL_NAME=gemini-1.5-flash
 LLM_TEMPERATURE=0.2
 LLM_MAX_OUTPUT_TOKENS=1024
+MIN_SIMILARITY_THRESHOLD=0.20
 DEFAULT_TOP_K=4
 DEFAULT_CHUNK_SIZE=1000
 DEFAULT_CHUNK_OVERLAP=200
 ```
 
-> **Note**: You can obtain a free API key from [Google AI Studio](https://aistudio.google.com/). The API key can also be provided directly via the Streamlit sidebar input during runtime.
+> **Note**: You can obtain a free API key from [Google AI Studio](https://aistudio.google.com/). The API key can also be provided directly via the Streamlit sidebar input during runtime without modifying `.env`.
 
 ---
 
@@ -197,7 +219,7 @@ Open your browser at `http://localhost:8501`.
 ### Interface Navigation:
 1. **Upload Documents**: Upload one or more PDF, TXT, or DOCX files via the sidebar.
 2. **💬 Document Chatbot**: Ask questions grounded in your files, inspect source citations, view detected query intent badges, and manage session history.
-3. **📝 Document Summarization**: Choose a summary style (Executive, Key Points, Comprehensive) and generate concise, structured summaries.
+3. **📝 Document Summarization**: Choose a summary style (Executive, Key Points, Comprehensive) and generate concise, structured summaries with download option.
 4. **🎭 Sentiment Analysis**: Evaluate emotional tone (Positive, Negative, Neutral) and confidence scores of uploaded documents or custom excerpts.
 5. **🎯 Intent Analysis**: Interactively test and verify query intents with sample test queries.
 6. **🔍 Semantic Search**: Search the raw FAISS vector index and review nearest neighbors with relevance scores.
@@ -206,22 +228,78 @@ Open your browser at `http://localhost:8501`.
 
 ---
 
+## 🎓 University Viva Demonstration Guide
+
+When presenting this project in a viva or technical demonstration, follow this step-by-step walkthrough:
+
+### Step 1: Explain the Document Ingestion Pipeline
+* Show the sidebar file uploader and upload sample PDF, TXT, and DOCX files.
+* Explain how `DocumentLoader` inspects file extension and extracts text (`pypdf` for page-level PDF, `docx` for paragraphs/tables, `txt` with auto-encoding).
+* Show that `TextPreprocessor` normalizes Unicode (NFKC) and cleans linebreaks without losing numbers or punctuation.
+* Explain that `DocumentChunker` breaks text into semantically cohesive overlapping blocks while embedding rich metadata (`file_name`, `page`, `chunk_index`, `total_chunks`).
+
+### Step 2: Dense Embeddings & Vector Search (FAISS)
+* Switch to the **Indexed Chunks** tab to show the chunks created with metadata tags.
+* Switch to the **Semantic Search** tab. Type a semantic concept (not necessarily exact keywords from the text).
+* Show how FAISS finds nearest neighbors and computes normalized cosine similarity scores (`0% - 100%`).
+
+### Step 3: Grounded RAG Chatbot & Citations
+* Switch to the **Document Chatbot** tab.
+* Ask a factual question present in the document. Point out the structured answer synthesized by Gemini.
+* Expand the **View Source Citations** panel to show the exact source document, page number, chunk ID, and snippet.
+* Ask an out-of-domain question (e.g., *"What is the recipe for lasagna?"* against a tech document).
+* Show the anti-hallucination guardrail triggering: `"I couldn't find this information in the uploaded documents."`
+
+### Step 4: Multi-Turn Conversation Memory & Export
+* Demonstrate follow-up questions in the chat session.
+* Click **Export Chat** to download the Markdown transcript showing all turns, timestamps, and citations.
+* Click **Clear Chat** to show instant session history resetting.
+
+### Step 5: Document Summarization (Multi-Style & Offline Fallback)
+* Switch to the **Document Summarization** tab.
+* Select **Executive Summary**, **Key Points**, or **Comprehensive Overview**.
+* Show how large documents are condensed via chunked map-reduce. Mention the extractive frequency-based fallback that operates if no API key is set.
+
+### Step 6: Sentiment & Intent NLP Features
+* Switch to **Sentiment Analysis** to show document emotional tone classification with confidence distribution.
+* Switch to **Intent Analysis** to show how incoming queries are categorized into *Question*, *Summary Request*, *Information Search*, or *Explanation Request*.
+
+---
+
 ## 🧪 Running Automated Tests
 
-Run the test suite across the NLP features (conversation history, summarization, sentiment analysis, and intent classification):
+Run the complete test suite using Python's built-in `unittest` runner:
 
 ```bash
-python tests/test_nlp_features.py
+python -m unittest discover tests
 ```
 
-Run the RAG pipeline and grounded answering tests:
+Or using `pytest`:
 
 ```bash
-python tests/test_rag_pipeline.py
+pytest
 ```
 
-Run the entire test suite:
+Run specific test modules:
 
 ```bash
-python -m unittest discover -s tests
+# Test multi-format ingestion and cross-retrieval
+python -m unittest tests/test_vector_search_integration.py
+
+# Test RAG grounded generation and guardrails
+python -m unittest tests/test_rag_pipeline.py
+
+# Test document loaders and corrupt file handling
+python -m unittest tests/test_document_loader.py
+
+# Test NLP features (History, Summarization, Sentiment, Intent)
+python -m unittest tests/test_nlp_features.py
 ```
+
+---
+
+## 🔒 Security & Privacy
+
+* **No Hardcoded Keys**: API keys are never stored in the repository. All keys are loaded from environment variables (`.env`) or provided via the password-masked Streamlit UI input.
+* **Ignored Secrets**: `.env` is explicitly declared in `.gitignore` to prevent accidental credential leakage.
+* **In-Memory Storage**: FAISS vector indexes are generated in-memory during the application session and are not stored in unencrypted remote databases.
