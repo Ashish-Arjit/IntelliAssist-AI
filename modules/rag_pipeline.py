@@ -13,6 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from config import (
     DEFAULT_LLM_MODEL,
     DEFAULT_MAX_OUTPUT_TOKENS,
+    DEFAULT_MIN_SIMILARITY_THRESHOLD,
     DEFAULT_TEMPERATURE,
     DEFAULT_TOP_K,
     NO_CONTEXT_FOUND_MESSAGE,
@@ -257,11 +258,14 @@ class RAGPipeline:
             }
 
         # 4. Retrieval: FAISS Similarity Search
+        effective_threshold = (
+            score_threshold if score_threshold is not None else DEFAULT_MIN_SIMILARITY_THRESHOLD
+        )
         try:
             retrieved_docs = self.retrieve_context(
                 query=cleaned_question,
                 top_k=top_k,
-                score_threshold=score_threshold,
+                score_threshold=effective_threshold,
             )
         except Exception as ret_err:
             return {
