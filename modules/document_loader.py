@@ -58,12 +58,29 @@ class DocumentLoader:
         if filename:
             resolved_filename = filename
 
-        reader = PdfReader(stream)
-        total_pages = len(reader.pages)
+        try:
+            reader = PdfReader(stream)
+            if reader.is_encrypted:
+                raise ValueError(
+                    f"The PDF file '{resolved_filename}' is encrypted or password-protected. "
+                    "Please provide an unencrypted PDF."
+                )
+            total_pages = len(reader.pages)
+        except Exception as e:
+            if isinstance(e, ValueError):
+                raise
+            raise ValueError(
+                f"Failed to read PDF file '{resolved_filename}': Corrupted or invalid PDF format ({type(e).__name__})."
+            ) from e
+
         documents: List[Document] = []
 
         for page_idx, page in enumerate(reader.pages, start=1):
-            text = page.extract_text() or ""
+            try:
+                text = page.extract_text() or ""
+            except Exception:
+                text = ""
+
             metadata = {
                 "source": resolved_filename,
                 "file_name": resolved_filename,
@@ -134,7 +151,13 @@ class DocumentLoader:
         if filename:
             resolved_filename = filename
 
-        doc = docx.Document(stream)
+        try:
+            doc = docx.Document(stream)
+        except Exception as e:
+            raise ValueError(
+                f"Failed to read DOCX file '{resolved_filename}': Corrupted or invalid Word document format ({type(e).__name__})."
+            ) from e
+
         paragraphs_text = [p.text for p in doc.paragraphs if p.text.strip()]
         
         # Also extract table text if present

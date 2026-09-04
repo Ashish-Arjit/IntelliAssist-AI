@@ -73,6 +73,20 @@ class TestDocumentLoader(unittest.TestCase):
         with self.assertRaises(ValueError):
             DocumentLoader.load_document(b"fake", filename="data.xyz")
 
+    def test_corrupted_pdf_error_handling(self):
+        """Verify that corrupted PDF input raises a clear, descriptive ValueError."""
+        corrupt_bytes = b"%PDF-1.4\nNOT_A_VALID_PDF_STREAM_BODY\n%%EOF"
+        with self.assertRaises(ValueError) as ctx:
+            DocumentLoader.load_pdf(corrupt_bytes, filename="broken.pdf")
+        self.assertIn("Corrupted or invalid PDF format", str(ctx.exception))
+
+    def test_corrupted_docx_error_handling(self):
+        """Verify that corrupted DOCX input raises a clear, descriptive ValueError."""
+        corrupt_bytes = b"PK\x03\x04ThisIsNotAValidZipOrDocxArchiveStream"
+        with self.assertRaises(ValueError) as ctx:
+            DocumentLoader.load_docx(corrupt_bytes, filename="broken.docx")
+        self.assertIn("Corrupted or invalid Word document format", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()
