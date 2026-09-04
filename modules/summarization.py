@@ -19,7 +19,6 @@ from config import (
     MAX_DIRECT_SUMMARY_CHARS,
     MISSING_API_KEY_MESSAGE,
     SUMMARY_CHUNK_SIZE,
-    SUMMARY_STYLES,
 )
 
 

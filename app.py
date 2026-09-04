@@ -4,7 +4,7 @@ Complete RAG Pipeline with Google Gemini LLM, FAISS Vector Search,
 Grounded Answering, and Verified Source Citations.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 import os
 import streamlit as st
 from langchain_core.documents import Document
@@ -15,7 +15,6 @@ from config import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_LLM_MODEL,
     DEFAULT_SENTIMENT_MODEL,
-    DEFAULT_SUMMARY_STYLE,
     DEFAULT_TOP_K,
     INTENT_CATEGORIES,
     MAX_TOP_K,
@@ -40,12 +39,9 @@ from utils.helpers import (
     clean_query_text,
     clear_chat_history,
     export_chat_history,
-    format_citation_label,
-    format_conversation_timestamp,
     format_file_size,
     format_similarity_score,
     get_score_badge_color,
-    truncate_snippet,
 )
 
 # ---------------------------------------------------------

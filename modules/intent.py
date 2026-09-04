@@ -10,7 +10,7 @@ Uses linguistic markers, syntactic cues, and keyword pattern scoring for
 fast, deterministic, and easily explainable NLP intent classification.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 import re
 
 from config import INTENT_CATEGORIES

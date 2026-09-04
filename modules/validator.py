@@ -5,7 +5,7 @@ Provides user-friendly validation error messages and prevents processing failure
 
 from dataclasses import dataclass, field
 import os
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Dict, List, Optional, Set
 from langchain_core.documents import Document
 
 

@@ -5,7 +5,7 @@ with a robust lexicon-based NLP fallback for reliable offline viva demonstration
 Classifies text into Positive, Negative, or Neutral with confidence scores.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 import logging
 import re
 
