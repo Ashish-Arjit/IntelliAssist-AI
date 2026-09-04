@@ -212,6 +212,21 @@ if "sentiment_result" not in st.session_state:
 if "intent_test_result" not in st.session_state:
     st.session_state["intent_test_result"] = None
 
+if "doc_cache_key" not in st.session_state:
+    st.session_state["doc_cache_key"] = None
+
+if "cached_vector_manager" not in st.session_state:
+    st.session_state["cached_vector_manager"] = None
+
+if "cached_preprocessed_docs" not in st.session_state:
+    st.session_state["cached_preprocessed_docs"] = []
+
+if "cached_chunks" not in st.session_state:
+    st.session_state["cached_chunks"] = []
+
+if "cached_processing_status" not in st.session_state:
+    st.session_state["cached_processing_status"] = []
+
 
 # ---------------------------------------------------------
 # Sidebar Controls & Settings
@@ -314,6 +329,13 @@ st.markdown(
 # Welcome Screen (No Documents Uploaded)
 # ---------------------------------------------------------
 if not uploaded_files:
+    # Clear cached document state when all files are removed
+    st.session_state["doc_cache_key"] = None
+    st.session_state["cached_vector_manager"] = None
+    st.session_state["cached_preprocessed_docs"] = []
+    st.session_state["cached_chunks"] = []
+    st.session_state["cached_processing_status"] = []
+
     st.info("👋 **Welcome to IntelliAssist AI!** Upload one or more **PDF**, **TXT**, or **DOCX** files in the sidebar to start asking questions grounded in your documents.")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -377,81 +399,105 @@ else:
         st.caption(f"Details: {type(e).__name__}: {str(e)}")
         st.stop()
 
-    # Process all uploaded files
-    all_preprocessed_docs: List[Document] = []
-    all_chunks: List[Document] = []
-    file_processing_status: List[Dict[str, Any]] = []
+    # Compute current upload cache signature
+    current_cache_key = (
+        tuple((f.name, getattr(f, "size", 0)) for f in uploaded_files),
+        chunk_size,
+        chunk_overlap,
+    )
 
-    with st.spinner("Processing documents, generating embeddings, and building FAISS vector index..."):
-        chunker = DocumentChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+    # Check if we can reuse cached documents and vector index
+    if (
+        st.session_state.get("doc_cache_key") == current_cache_key
+        and st.session_state.get("cached_vector_manager") is not None
+        and st.session_state["cached_vector_manager"].is_initialized
+    ):
+        all_preprocessed_docs = st.session_state["cached_preprocessed_docs"]
+        all_chunks = st.session_state["cached_chunks"]
+        file_processing_status = st.session_state["cached_processing_status"]
+        vector_manager = st.session_state["cached_vector_manager"]
+    else:
+        all_preprocessed_docs: List[Document] = []
+        all_chunks: List[Document] = []
+        file_processing_status: List[Dict[str, Any]] = []
 
-        for up_file in uploaded_files:
-            file_name = up_file.name
-            # 1. Validation
-            val_res = DocumentValidator.validate_file_upload(up_file)
-            if not val_res.is_valid:
-                file_processing_status.append({
-                    "filename": file_name,
-                    "status": "error",
-                    "message": val_res.error_message,
-                    "chunks_count": 0,
-                })
-                continue
+        with st.spinner("Processing documents, generating embeddings, and building FAISS vector index..."):
+            chunker = DocumentChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
-            try:
-                # 2. Text Extraction
-                raw_docs = DocumentLoader.load_document(up_file, filename=file_name)
-                
-                # 3. Content Validation
-                c_val = DocumentValidator.validate_extracted_content(raw_docs, filename=file_name)
-                if not c_val.is_valid:
+            for up_file in uploaded_files:
+                file_name = up_file.name
+                # 1. Validation
+                val_res = DocumentValidator.validate_file_upload(up_file)
+                if not val_res.is_valid:
                     file_processing_status.append({
                         "filename": file_name,
-                        "status": "warning",
-                        "message": c_val.error_message,
+                        "status": "error",
+                        "message": val_res.error_message,
                         "chunks_count": 0,
                     })
                     continue
 
-                # 4. Preprocessing
-                prep_docs = TextPreprocessor.preprocess_documents(raw_docs, drop_empty=True)
-                
-                # 5. Chunking
-                doc_chunks = chunker.split_documents(prep_docs)
+                try:
+                    # 2. Text Extraction
+                    raw_docs = DocumentLoader.load_document(up_file, filename=file_name)
+                    
+                    # 3. Content Validation
+                    c_val = DocumentValidator.validate_extracted_content(raw_docs, filename=file_name)
+                    if not c_val.is_valid:
+                        file_processing_status.append({
+                            "filename": file_name,
+                            "status": "warning",
+                            "message": c_val.error_message,
+                            "chunks_count": 0,
+                        })
+                        continue
 
-                all_preprocessed_docs.extend(prep_docs)
-                all_chunks.extend(doc_chunks)
+                    # 4. Preprocessing
+                    prep_docs = TextPreprocessor.preprocess_documents(raw_docs, drop_empty=True)
+                    
+                    # 5. Chunking
+                    doc_chunks = chunker.split_documents(prep_docs)
 
-                file_processing_status.append({
-                    "filename": file_name,
-                    "status": "success",
-                    "size_bytes": up_file.size,
-                    "sections_count": len(prep_docs),
-                    "chunks_count": len(doc_chunks),
-                })
-            except Exception as doc_err:
-                file_processing_status.append({
-                    "filename": file_name,
-                    "status": "error",
-                    "message": f"Extraction error: {type(doc_err).__name__}",
-                    "chunks_count": 0,
-                })
+                    all_preprocessed_docs.extend(prep_docs)
+                    all_chunks.extend(doc_chunks)
 
-        # 6. Build or Update FAISS Vector Store Index
-        vector_manager = VectorStoreManager(embedding_manager=embedding_manager)
-        if all_chunks:
-            try:
-                vector_manager.create_from_documents(all_chunks)
-            except Exception as vec_err:
-                st.error("Failed to build FAISS vector index from document chunks.")
-                st.caption(f"Error: {type(vec_err).__name__}")
+                    file_processing_status.append({
+                        "filename": file_name,
+                        "status": "success",
+                        "size_bytes": getattr(up_file, "size", 0),
+                        "sections_count": len(prep_docs),
+                        "chunks_count": len(doc_chunks),
+                    })
+                except Exception as doc_err:
+                    file_processing_status.append({
+                        "filename": file_name,
+                        "status": "error",
+                        "message": f"Extraction error: {str(doc_err) or type(doc_err).__name__}",
+                        "chunks_count": 0,
+                    })
 
-        # 7. Initialize RAG Pipeline
-        rag_pipeline = RAGPipeline(
-            vector_store_manager=vector_manager,
-            model_name=DEFAULT_LLM_MODEL,
-            api_key=active_api_key,
-        )
+            # 6. Build or Update FAISS Vector Store Index
+            vector_manager = VectorStoreManager(embedding_manager=embedding_manager)
+            if all_chunks:
+                try:
+                    vector_manager.create_from_documents(all_chunks)
+                except Exception as vec_err:
+                    st.error("Failed to build FAISS vector index from document chunks.")
+                    st.caption(f"Error: {type(vec_err).__name__}")
+
+            # Update cache in session state
+            st.session_state["doc_cache_key"] = current_cache_key
+            st.session_state["cached_preprocessed_docs"] = all_preprocessed_docs
+            st.session_state["cached_chunks"] = all_chunks
+            st.session_state["cached_processing_status"] = file_processing_status
+            st.session_state["cached_vector_manager"] = vector_manager
+
+    # 7. Initialize RAG Pipeline with active credentials
+    rag_pipeline = RAGPipeline(
+        vector_store_manager=vector_manager,
+        model_name=DEFAULT_LLM_MODEL,
+        api_key=active_api_key,
+    )
 
     # ---------------------------------------------------------
     # Ingestion Status & Metrics Bar
