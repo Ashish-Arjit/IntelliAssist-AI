@@ -19,37 +19,80 @@ IntelliAssist AI solves these challenges by combining:
 
 ---
 
-## 🏗️ Complete Architecture & Workflow Pipeline
+## 🏗️ System Architecture
+
+The following diagram illustrates the actual implemented end-to-end architecture of IntelliAssist AI:
 
 ```text
-                                Uploaded Documents (PDF / TXT / DOCX)
-                                                  ↓
-                                       DocumentLoader & Validator
-                                                  ↓
-                                        TextPreprocessor
-                                                  ↓
-                                        DocumentChunker
-                                                  ↓
-                         ┌────────────────────────┴────────────────────────┐
-                         ↓                                                 ↓
-      Hugging Face Embeddings (MiniLM-L6-v2)                    Document Summarization
-                         ↓                                (Executive / Key Points / Overview)
-               FAISS Vector Store                                          ↓
-                         ↓                                  Document Sentiment Analysis
-             Dense Similarity Search                      (Positive / Negative / Neutral)
-                         ↓
-            Retrieved Context Chunks + Citations
-                         ↓
-  User Query ──► Query Intent Analyzer ──► Grounded RAG Pipeline ──► Grounded Answer + Citations
-  (Question / Summary / Search / Explain)     (Google Gemini LLM)             ↓
-                                                                     Conversation History
-                                                                (Session Multi-Turn Memory)
+User
+  ↓
+Streamlit Interface
+  ↓
+Document Upload
+  ↓
+Text Extraction
+  ↓
+Text Preprocessing
+  ↓
+Text Chunking
+  ↓
+Hugging Face Embeddings
+  ↓
+FAISS Vector Store
+  ↓
+Semantic Retrieval
+  ↓
+Relevant Context
+  ↓
+LLM
+  ↓
+Context-Aware Answer
+  ↓
+Source Citations
 ```
 
-The complete execution lifecycle operates in sequential stages:
-```text
-Upload Document ──► Extract Text ──► Preprocess Text ──► Create Chunks ──► Generate Embeddings ──► Create FAISS Index ──► Semantic Search ──► Retrieve Context ──► Generate Grounded Answer ──► Display Citations
-```
+### Architectural Component Breakdown
+
+1. **User Interaction**: Users interact with the system via a modern, intuitive Streamlit web interface.
+2. **Document Ingestion & Validation**: Uploaded documents (PDF, TXT, DOCX) pass through format and size validation (`DocumentValidator`).
+3. **Text Extraction**: Specialized loaders extract raw text while tracking document-level and page-level metadata (`DocumentLoader`).
+4. **Text Preprocessing**: Normalizes Unicode characters, cleans excessive whitespace, and eliminates noise while preserving semantic structure (`TextPreprocessor`).
+5. **Text Chunking**: Breaks normalized text into semantically cohesive overlapping segments (default chunk size: 1000 characters, overlap: 200 characters) preserving source tags (`DocumentChunker`).
+6. **Hugging Face Embeddings**: Chunks are converted into 384-dimensional dense vectors using `sentence-transformers/all-MiniLM-L6-v2` (`EmbeddingManager`).
+7. **FAISS Vector Store**: Embeddings and document metadata are indexed in an in-memory FAISS flat L2 vector index (`VectorStoreManager`).
+8. **Semantic Retrieval**: Queries are embedded into the same vector space, and the top-$k$ nearest neighbors are retrieved based on vector distance.
+9. **Relevant Context Assembly**: Retrieved chunks above the similarity threshold are extracted with citations.
+10. **LLM Synthesis**: Context and user query are formatted with a strict grounding prompt and sent to Google Gemini (`gemini-1.5-flash`).
+11. **Context-Aware Answer**: The synthesized answer is displayed with explicit guardrails against hallucination.
+12. **Source Citations**: Collapsible citation cards display source file names, PDF page numbers, chunk indices, similarity scores, and text previews.
+
+---
+
+## 🔄 RAG Workflow
+
+The Retrieval-Augmented Generation (RAG) execution workflow operates through four stages:
+
+1. **Document Ingestion Phase**:
+   - The user selects one or more files (`.pdf`, `.txt`, `.docx`).
+   - The files are checked for valid extensions, non-empty content, and size limits ($\le$ 25 MB).
+   - Text is parsed using `pypdf` for PDFs, `python-docx` for Word documents, and multi-encoding readers for plain text.
+   - Text is cleaned with Unicode NFKC normalization and formatted into structured chunks.
+
+2. **Embedding & Vector Indexing Phase**:
+   - The local Sentence Transformers model computes dense vector representations for all chunks.
+   - Vectors are indexed in an in-memory FAISS index.
+   - Chunks, metadata, and the FAISS vector index are cached in Streamlit's `session_state` to prevent redundant re-computation across reruns.
+
+3. **Query & Retrieval Phase**:
+   - The user inputs a natural language question.
+   - The query intent is classified (`Question`, `Summary Request`, `Information Search`, `Explanation Request`).
+   - The query is vectorized and queried against the FAISS index to retrieve the top-$k$ most relevant chunks.
+   - Normalized relevance scores (`1 - (distance^2 / 2)`) are computed; chunks falling below the minimum threshold (default 0.20) are excluded.
+
+4. **Generation & Verification Phase**:
+   - If no chunks meet the relevance threshold, the pipeline immediately returns: `"I couldn't find this information in the uploaded documents."`
+   - Otherwise, the retrieved chunks are formatted into a constrained prompt instructing Gemini to answer solely based on the provided context.
+   - The generated response is returned alongside structured source citations.
 
 ---
 
