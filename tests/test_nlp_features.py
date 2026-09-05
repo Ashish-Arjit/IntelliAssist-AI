@@ -14,10 +14,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from utils.helpers import (
     build_chat_message,
-    clean_query_text,
     clear_chat_history,
     export_chat_history,
-    format_conversation_timestamp,
 )
 
 

@@ -14,7 +14,7 @@ from config import (
     NO_DOCUMENTS_MESSAGE,
     MISSING_API_KEY_MESSAGE,
 )
-from modules.rag_pipeline import RAGPipeline, RAG_SYSTEM_PROMPT
+from modules.rag_pipeline import RAGPipeline
 
 
 class TestRAGPipeline(unittest.TestCase):

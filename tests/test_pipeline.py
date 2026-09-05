@@ -3,7 +3,7 @@
 from io import BytesIO
 import unittest
 import docx
-from pypdf import PageObject, PdfWriter
+
 
 from modules.chunker import DocumentChunker
 from modules.document_loader import DocumentLoader

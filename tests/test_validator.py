@@ -1,6 +1,6 @@
 """Unit tests for DocumentValidator."""
 
-from io import BytesIO
+
 import unittest
 from langchain_core.documents import Document
 from modules.validator import DocumentValidator
