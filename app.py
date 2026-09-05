@@ -243,8 +243,19 @@ with st.sidebar:
     st.divider()
     st.subheader("🔑 LLM Configuration")
 
-    # Check for API Key in environment or session
+    # Check for API Key in environment, Streamlit secrets, or session
     env_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or ""
+    if not env_api_key:
+        try:
+            if hasattr(st, "secrets"):
+                env_api_key = (
+                    st.secrets.get("GOOGLE_API_KEY", "")
+                    or st.secrets.get("GEMINI_API_KEY", "")
+                    or ""
+                )
+        except Exception:
+            env_api_key = ""
+
     custom_api_key = st.text_input(
         "Google Gemini API Key",
         value=env_api_key if env_api_key and env_api_key != "your_google_api_key_here" else "",
@@ -258,7 +269,7 @@ with st.sidebar:
     if active_api_key and active_api_key != "your_google_api_key_here":
         st.success("✅ Gemini API Key Configured")
     else:
-        st.warning("⚠️ No Gemini API Key found. Add `GOOGLE_API_KEY` to `.env` or input above.")
+        st.warning("⚠️ No Gemini API Key found. Add `GOOGLE_API_KEY` to `.env`, Streamlit secrets, or input above.")
 
     st.divider()
     st.subheader("🔍 Retrieval Settings")

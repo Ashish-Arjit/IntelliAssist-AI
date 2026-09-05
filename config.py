@@ -10,33 +10,48 @@ from dotenv import load_dotenv
 # Load environment variables from .env if present
 load_dotenv()
 
+
+def get_config_value(key: str, default: str = "") -> str:
+    """Retrieve configuration from environment variable or Streamlit secrets with fallback."""
+    val = os.getenv(key)
+    if val is not None and val != "":
+        return val
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and key in st.secrets:
+            return str(st.secrets[key])
+    except Exception:
+        pass
+    return default
+
+
 # Embedding Configuration
-DEFAULT_EMBEDDING_MODEL: str = os.getenv(
+DEFAULT_EMBEDDING_MODEL: str = get_config_value(
     "EMBEDDING_MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"
 )
-EMBEDDING_DEVICE: str = os.getenv("EMBEDDING_DEVICE", "cpu")
+EMBEDDING_DEVICE: str = get_config_value("EMBEDDING_DEVICE", "cpu")
 NORMALIZE_EMBEDDINGS: bool = (
-    os.getenv("NORMALIZE_EMBEDDINGS", "True").lower() in ("true", "1", "yes")
+    get_config_value("NORMALIZE_EMBEDDINGS", "True").lower() in ("true", "1", "yes")
 )
 
 # Search & Retrieval Configuration
-DEFAULT_TOP_K: int = int(os.getenv("DEFAULT_TOP_K", 4))
+DEFAULT_TOP_K: int = int(get_config_value("DEFAULT_TOP_K", "4"))
 MIN_TOP_K: int = 1
 MAX_TOP_K: int = 10
 
 # Document Ingestion Configuration
-DEFAULT_CHUNK_SIZE: int = int(os.getenv("DEFAULT_CHUNK_SIZE", 1000))
-DEFAULT_CHUNK_OVERLAP: int = int(os.getenv("DEFAULT_CHUNK_OVERLAP", 200))
-MAX_UPLOAD_SIZE_MB: int = int(os.getenv("MAX_UPLOAD_SIZE_MB", 25))
+DEFAULT_CHUNK_SIZE: int = int(get_config_value("DEFAULT_CHUNK_SIZE", "1000"))
+DEFAULT_CHUNK_OVERLAP: int = int(get_config_value("DEFAULT_CHUNK_OVERLAP", "200"))
+MAX_UPLOAD_SIZE_MB: int = int(get_config_value("MAX_UPLOAD_SIZE_MB", "25"))
 MAX_FILE_SIZE_BYTES: int = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ALLOWED_EXTENSIONS: set[str] = {"pdf", "txt", "docx"}
 
 # LLM & RAG Pipeline Configuration
-DEFAULT_LLM_PROVIDER: str = os.getenv("LLM_PROVIDER", "gemini")
-DEFAULT_LLM_MODEL: str = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
-DEFAULT_TEMPERATURE: float = float(os.getenv("LLM_TEMPERATURE", "0.2"))
-DEFAULT_MAX_OUTPUT_TOKENS: int = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "1024"))
-DEFAULT_MIN_SIMILARITY_THRESHOLD: float = float(os.getenv("MIN_SIMILARITY_THRESHOLD", "0.20"))
+DEFAULT_LLM_PROVIDER: str = get_config_value("LLM_PROVIDER", "gemini")
+DEFAULT_LLM_MODEL: str = get_config_value("LLM_MODEL_NAME", "gemini-1.5-flash")
+DEFAULT_TEMPERATURE: float = float(get_config_value("LLM_TEMPERATURE", "0.2"))
+DEFAULT_MAX_OUTPUT_TOKENS: int = int(get_config_value("LLM_MAX_OUTPUT_TOKENS", "1024"))
+DEFAULT_MIN_SIMILARITY_THRESHOLD: float = float(get_config_value("MIN_SIMILARITY_THRESHOLD", "0.20"))
 
 
 # Grounded RAG Messages & Fallbacks
@@ -47,7 +62,7 @@ NO_DOCUMENTS_MESSAGE: str = (
     "Please upload and process at least one document before asking questions."
 )
 MISSING_API_KEY_MESSAGE: str = (
-    "LLM API key not detected. Please configure GOOGLE_API_KEY in your environment or .env file."
+    "LLM API key not detected. Please configure GOOGLE_API_KEY in your environment, Streamlit secrets, or sidebar input."
 )
 
 # Summarization Configuration

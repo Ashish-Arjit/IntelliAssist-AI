@@ -73,6 +73,17 @@ class RAGPipeline:
             self.api_key = api_key
         else:
             self.api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+            if not self.api_key:
+                try:
+                    import streamlit as st
+                    if hasattr(st, "secrets"):
+                        self.api_key = (
+                            st.secrets.get("GOOGLE_API_KEY", "")
+                            or st.secrets.get("GEMINI_API_KEY", "")
+                            or None
+                        )
+                except Exception:
+                    pass
         self._llm: Optional[ChatGoogleGenerativeAI] = None
 
         self.prompt_template = self._build_prompt_template()
